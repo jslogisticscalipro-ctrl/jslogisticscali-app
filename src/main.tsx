@@ -6,6 +6,9 @@ import { FalloApi } from "./api/cliente";
 import { ProveedorSesion } from "./auth/Sesion";
 import App from "./App";
 import "./index.css";
+import { iniciarPwa } from "./lib/pwa";
+
+iniciarPwa();
 
 const qc = new QueryClient({
   defaultOptions: {

@@ -16,6 +16,7 @@ import { CLAVE_NAV_ADMIN, usePersistedTab } from "../hooks/usePersistedTab";
 import { navegacionActual, restaurarNavegacion } from "./navegacion";
 import { precargarPestana } from "./oficina/pestanas";
 import { precargarAvisos } from "../lib/alertasAdmin";
+import { OpcionInstalarApp } from "./InstalarApp";
 import "./estilos.css";
 import "./ajustes.css";
 
@@ -191,6 +192,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
               <div className="perfil-info"><b>{nom}</b><small>Vista: {NOMBRE_MODO[E.rol]}</small></div>
               {esAdmin && <div className="perfil-modos"><span>Cambiar modo de vista</span><div role="group" aria-label="Modo"><button type="button" aria-pressed={enMensajero} onClick={() => { cambiarRol("mensajero"); setPerfilAbierto(false); }}>Mensajero</button><button type="button" aria-pressed={enPatinador} onClick={() => { cambiarRol("patinador"); setPerfilAbierto(false); }}>Patinador</button><button type="button" aria-pressed={enOficina} onClick={() => { cambiarRol("admin"); setPerfilAbierto(false); }}>Administración</button></div></div>}
               <button type="button" className="perfil-opcion" onClick={() => { cambiarTema(); setPerfilAbierto(false); }}>{oscuro ? <IconoSol /> : <IconoLuna />}<span>{oscuro ? "Modo claro" : "Modo oscuro"}</span></button>
+              <OpcionInstalarApp alAccionar={() => setPerfilAbierto(false)} />
               <button type="button" className="perfil-opcion perfil-salir" onClick={() => { setPerfilAbierto(false); void salir(); }}><IconoSalir /><span>Cerrar sesión</span></button>
             </div>}
           </div>
