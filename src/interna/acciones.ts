@@ -4,7 +4,7 @@
  */
 import * as api from "../api/servicios";
 import type * as T from "../api/tipos";
-import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente } from "./motor";
+import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente, idSinDesc } from "./motor";
 import { aPedido, aPersona } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
@@ -324,6 +324,12 @@ export async function ponerJornada(personaId: string, dia: string, valor: number
   const k = previo ? personaId + "_previo_" + dia : personaId + "_" + dia;
   if (DEMO) return tocar(s => { if (valor) s.jornadas[k] = { id: k, personaId, dia, valor }; else delete s.jornadas[k]; });
   await tras(valor ? api.jornadas.poner({ id: k, personaId, dia, valor, ...(previo ? { previo: true, nota: "Sueldo anterior" } : {}) } as T.Jornada) : api.jornadas.eliminar(k));
+}
+/** Un día sin el descuento de $ 25.000 para un mensajero (`activo`), o quitar esa marca. */
+export async function ponerSinDescuento(personaId: string, dia: string, activo: boolean) {
+  const k = idSinDesc(personaId, dia);
+  if (DEMO) return tocar(s => { if (activo) s.jornadas[k] = { id: k, personaId, dia, valor: 0, sinDescuento: true }; else delete s.jornadas[k]; });
+  await tras(activo ? api.jornadas.sinDescuento(personaId, dia) : api.jornadas.volverADescontar(personaId, dia));
 }
 /** El adelanto se devolvió (todo o una parte): entra hoy a la caja y se deja de descontar del sueldo. */
 export async function devolverAdelanto(aid: string, valor: number, medio: Medio) {

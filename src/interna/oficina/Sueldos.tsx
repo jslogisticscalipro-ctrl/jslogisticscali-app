@@ -1,12 +1,12 @@
 /* Oficina → Sueldos: la planilla de la semana, el cálculo del sueldo de Javier y los adelantos (pintarSueldos del prototipo). */
 import { useState } from "react";
 import {
-  S, hoy, hora, pesos, fechaLarga, resumenSemana, sueldoPersonaSemana, moverSemana, semanaDe, tipoDe, jornada, valorAdel, sueldoPrevio, yaContado, liquidacionesDe,
+  S, hoy, hora, pesos, fechaLarga, resumenSemana, sueldoPersonaSemana, moverSemana, semanaDe, tipoDe, jornada, valorAdel, sueldoPrevio, yaContado, liquidacionesDe, ganaPorcentaje, sinDescuento,
   MEDIOS, TIPOS, PAGO_FIJO, DIAS_SEM, DESC_SUELDO, sinTildes, type Medio, type Persona,
 } from "../motor";
 import { Cab, IconoCalendario, IconoOjo, useVentana } from "../ui";
 import { E } from "../estado";
-import { devolverAdelanto, guardarPersona, ponerJornada, quitarAdelanto } from "../acciones";
+import { devolverAdelanto, guardarPersona, ponerJornada, ponerSinDescuento, quitarAdelanto } from "../acciones";
 import { motivoError, useDatos } from "../datos";
 import { MovCaja } from "./modales";
 
@@ -73,7 +73,7 @@ export default function Sueldos({ pintar }: { pintar: () => void }) {
         </button></li>)}
       </ul></>}
     </> : <div className="vacio">Registra tu personal en la pestaña Personal.</div>}
-    <p className="sub" style={{ marginTop: 10 }}>Mensajeros: 70% de sus domicilios del día − {pesos(DESC_SUELDO)}. Patinadores, oficina y JS: toca cada día que trabajó (se marca con su pago por día); toca otra vez para quitarlo. Para un valor distinto, usa “otro valor”. Los domicilios de pedidos a nombre de oficina son 100% de JS y suman al sueldo de Javier.</p>
+    <p className="sub" style={{ marginTop: 10 }}>Mensajeros: 70% de sus domicilios del día − {pesos(DESC_SUELDO)} (en el detalle puedes dejar un día “sin descuento”). Patinadores, oficina y JS: toca cada día que trabajó (se marca con su pago por día); toca otra vez para quitarlo. Para un valor distinto, usa “otro valor”. Los domicilios de pedidos a nombre de oficina son 100% de JS y suman al sueldo de Javier.</p>
     {dueno && <JaviSemana R={R} nombre={dueno.nombre} />}
     <h2>Adelantos de la semana</h2>
     {adelSem.length ? <div className="tabla-env"><table><thead><tr><th>Día</th><th>Persona</th><th>Medio</th><th>Detalle</th><th className="n">Valor</th><th></th></tr></thead><tbody>
@@ -162,6 +162,14 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
     try { await ponerJornada(mid, dia, jornada(mid, dia) ? 0 : Number(m.tarifa)); } catch (e) { fallo(v)(e); }
     setOcupado("");
   };
+  // Un mensajero gana el 70 % de sus domicilios del día menos $ 25.000; administración puede quitarle ese descuento a un día.
+  const conDescuento = ganaPorcentaje(m);
+  const tocarSinDescuento = async (dia: string) => {
+    const marcado = sinDescuento(mid, dia);
+    setOcupado(dia);
+    try { await ponerSinDescuento(mid, dia, !marcado); v.avisar(marcado ? `Ese día vuelve a descontarle ${pesos(DESC_SUELDO)} a ${m.nombre}` : `Ese día no se le descuentan ${pesos(DESC_SUELDO)} a ${m.nombre}`); } catch (e) { fallo(v)(e); }
+    setOcupado("");
+  };
   const enlace = (txt: string, f: () => void) => <a href="#" className="enlace" onClick={e => { e.preventDefault(); f(); }}>{txt}</a>;
   return <div className="sd-detalle">
     <header className="sd-cab">
@@ -170,12 +178,16 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
     </header>
     <h3 className="sd-titulo">Desglose diario de la semana</h3>
     {editable && <p className="sub sd-ayuda">{m.tarifa ? <>Toca un día para marcarlo con {pesos(m.tarifa)}; otro toque lo quita. {enlace("Cambiar pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))} · {enlace("otro valor", () => v.abrir(<OtroValor m={m} dias={r.dias} />, "centrada-ancha"))}</> : enlace("Poner pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))}</p>}
+    {conDescuento && <p className="sub sd-ayuda">Cada día se le descuentan {pesos(DESC_SUELDO)}. Si un día no debe descontarse, toca “Sin descuento”; otro toque lo quita.</p>}
     <ul className="sd-dias">
-      {r.dias.map((d, i) => { const val = r.vals[i], j = jornada(mid, d); return <li key={d}>
+      {r.dias.map((d, i) => { const val = r.vals[i], j = jornada(mid, d), sd = conDescuento && sinDescuento(mid, d), puedeMarcar = conDescuento && d <= hoyS && (!!val || sd); return <li key={d}>
         <span>{DIAS_LARGOS[i]} <small>{diaCorto(d)}</small></span>
         {editable
           ? <button className="dia-btn" aria-pressed={!!j} disabled={(d > hoyS && !j) || ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${j ? "trabajó" : "no trabajó"}`} onClick={() => tocarDia(d)}>{j ? "✓ " + pesos(j) : "—"}</button>
-          : <b className={val < 0 ? "neg" : val ? "" : "sd-cero"}>{val ? pesos(val) : "—"}</b>}
+          : <span className="sd-der">
+            {puedeMarcar && <button type="button" className="dia-btn sd-sindesc" aria-pressed={sd} disabled={ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${sd ? "sin descuento, tocar para volver a descontar" : "con descuento, tocar para quitarlo"}`} onClick={() => tocarSinDescuento(d)}>{sd ? "✓ Sin descuento" : "Sin descuento"}</button>}
+            <b className={val < 0 ? "neg" : val ? "" : "sd-cero"}>{val ? pesos(val) : "—"}</b>
+          </span>}
       </li>; })}
     </ul>
     <dl className="sd-resumen">

@@ -231,7 +231,11 @@ export const cuentasInternas = coleccion<CuentaInterna, Omit<CuentaInterna, "id"
 export const jornadas = {
   ...coleccion<Jornada>("/jornadas", "jornadas", "jornada"),
   /** Crea o cambia el pago de un día (o el sueldo previo de una semana). */
-  poner: (j: Jornada) => datos<{ jornada: Jornada }>(api.put(`/jornadas/${j.id}`, j)).then(r => r.jornada)
+  poner: (j: Jornada) => datos<{ jornada: Jornada }>(api.put(`/jornadas/${j.id}`, j)).then(r => r.jornada),
+  /** Ese día el mensajero gana el 70 % completo, sin el descuento de $ 25.000 (solo administración, solo mensajeros, días que ya llegaron). */
+  sinDescuento: (personaId: string, dia: string) => datos<{ jornada: Jornada }>(api.put(`/sueldos/sin-descuento/${personaId}/${dia}`)).then(r => r.jornada),
+  /** Quita la marca: ese día vuelve a descontarse. */
+  volverADescontar: (personaId: string, dia: string) => datos<{ quitado: boolean }>(api.delete(`/sueldos/sin-descuento/${personaId}/${dia}`))
 };
 export const caja = {
   /** Fecha del último arqueo (lo anterior ya está contado y no se cambia). */

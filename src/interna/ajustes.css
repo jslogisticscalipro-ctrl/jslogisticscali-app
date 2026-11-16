@@ -1462,7 +1462,9 @@
 .jsl .sd-dias li + li{border-top:1px solid var(--linea)}
 .jsl .sd-dias li > span{font-weight:600;font-size:.88rem}
 .jsl .sd-dias li > span small{margin-left:4px;font-weight:400;color:var(--suave)}
-.jsl .sd-dias li > b{font-weight:800;font-variant-numeric:tabular-nums}
+.jsl .sd-dias li > b,.jsl .sd-dias .sd-der > b{font-weight:800;font-variant-numeric:tabular-nums}
+.jsl .sd-dias .sd-der{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px 10px;min-width:0}
+.jsl .sd-dias .sd-sindesc{min-width:0;min-height:36px;padding:4px 10px;font-size:.78rem}
 .jsl .sd-dias .sd-cero{font-weight:400;color:var(--suave)}
 .jsl .sd-resumen{margin:0;padding:14px 16px;border:1px solid var(--linea);border-radius:14px;font-size:.88rem}
 .jsl .sd-resumen div{display:flex;justify-content:space-between;gap:10px;padding:3px 0}

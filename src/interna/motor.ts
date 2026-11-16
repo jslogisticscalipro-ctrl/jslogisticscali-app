@@ -47,7 +47,7 @@ export interface Liquidacion {
   recibido: number; anterior: number; ajuste: number; debe: number; sueldo: number; nota?: string;
   recibidoAntes?: number; entregaFinal?: number; adelanto?: number; enRuta?: number; dia?: string; cobros?: number;
 }
-export interface Jornada { id: string; personaId: string; dia: string; valor: number }
+export interface Jornada { id: string; personaId: string; dia: string; valor: number; sinDescuento?: boolean }
 export interface CajaMov {
   id: string; tipo: "entra" | "sale" | "base" | "marca"; cat: string; valor: number; medio: Medio | "";
   concepto: string; fecha: number; personaId: string; personaUid?: string; cuentaId?: string; semana?: string;
@@ -266,9 +266,12 @@ export function cuadreDia(dia: string) {
 export const tipoDe = (m: Persona | undefined): TipoPersonal => m?.tipo || "mensajero";
 export const esRepartidor = (m: Persona | undefined) => ["mensajero", "dueno", "oficina"].includes(tipoDe(m));
 export const ganaPorcentaje = (m: Persona | undefined) => tipoDe(m) === "mensajero";
-export const sueldoDe = (domicilios: number) => domicilios * PCT_SUELDO - DESC_SUELDO;
+/** `sinDesc`: administración le quitó a ese día el descuento de $ 25.000 (jornada `{id}_sindesc_{dia}`). Igual que helpers/calculos.js del backend. */
+export const sueldoDe = (domicilios: number, sinDesc = false) => domicilios * PCT_SUELDO - (sinDesc ? 0 : DESC_SUELDO);
+export const idSinDesc = (pid: string, dia: string) => pid + "_sindesc_" + dia;
+export const sinDescuento = (pid: string, dia: string) => !!S.jornadas[idSinDesc(pid, dia)]?.sinDescuento;
 export const diaSueldo = (p: Pedido) => { const s = diaDe(p.creado || p.entregado || 0); return s >= SUELDO_POR_SALIDA ? s : diaDe(p.entregado || 0); };
-export const sueldoPedidos = (ps: Pedido[]) => { const g: Record<string, number> = {}; ps.forEach(p => { const d = diaSueldo(p); g[d] = (g[d] || 0) + servicio(p); }); return Object.values(g).reduce((a, x) => a + sueldoDe(x), 0); };
+export const sueldoPedidos = (ps: Pedido[], sinDesc: (mid: string, dia: string) => boolean = sinDescuento) => { const g: Record<string, number> = {}; ps.forEach(p => { const k = p.mensajeroId + "|" + diaSueldo(p); g[k] = (g[k] || 0) + servicio(p); }); return Object.entries(g).reduce((a, [k, x]) => { const [mid, d] = k.split("|"); return a + sueldoDe(x, sinDesc(mid, d)); }, 0); };
 export const sueldoTexto = (mid: string, ps: Pedido[]) => tipoDe(S.mensajeros[mid]) === "dueno" ? "Ver “Mi sueldo”" : tipoDe(S.mensajeros[mid]) === "oficina" ? "Pago por día" : pesos(sueldoPedidos(ps));
 export const vinculosDe = (mid: string) => Object.values(S.vinculos).filter(v => v.mensajeroId === mid);
 
@@ -286,7 +289,7 @@ export function sueldosDia(dia: string) {
   for (const [mid, ps] of Object.entries(porM)) {
     const dom = ps.reduce((a, p) => a + servicio(p), 0);
     if (["dueno", "oficina"].includes(tipoDe(S.mensajeros[mid]))) propios += dom;
-    else { res[mid] = sueldoDe(dom); dom30 += dom * (1 - PCT_SUELDO); desc += DESC_SUELDO; nMens++; }
+    else { const sd = sinDescuento(mid, dia); res[mid] = sueldoDe(dom, sd); dom30 += dom * (1 - PCT_SUELDO); if (!sd) { desc += DESC_SUELDO; nMens++; } }
   }
   for (const m of Object.values(S.mensajeros)) if (PAGO_FIJO.includes(tipoDe(m))) { const x = jornada(m.id, dia); if (x) { res[m.id] = x; fijos += x; } }
   const ganancias = Object.values(S.movimientos).filter(m => m.tipo === "ganancia" && diaDe(m.fecha) === dia).reduce((a, m) => a + (Number(m.valor) || 0), 0);

@@ -145,7 +145,9 @@ export async function descargarCuadre(dia: string): Promise<boolean> {
     wm.addRow([nom, null, null, null, null, null, null, null, null]);
     wm.getCell("B" + k).value = { formula: `COUNTIF(Pedidos!B:B,A${k})`, result: ps.length };
     wm.getCell("C" + k).value = { formula: `SUMIF(Pedidos!B:B,A${k},Pedidos!C:C)`, result: t.servicio };
-    wm.getCell("D" + k).value = ganaPorcentaje(S.mensajeros[mid]) ? { formula: `C${k}*${PCT_SUELDO}-${DESC_SUELDO}`, result: sueldoPedidos(ps) } : (TIPOS[tipoDe(S.mensajeros[mid])] || "");
+    // Un día sin el descuento de $ 25.000 baja lo que se resta en la fórmula, para que siga dando el mismo número.
+    const sueldo = sueldoPedidos(ps), descuento = sueldo === sueldoPedidos(ps, () => false) ? DESC_SUELDO : Math.round(t.servicio * PCT_SUELDO - sueldo);
+    wm.getCell("D" + k).value = ganaPorcentaje(S.mensajeros[mid]) ? { formula: `C${k}*${PCT_SUELDO}-${descuento}`, result: sueldo } : (TIPOS[tipoDe(S.mensajeros[mid])] || "");
     wm.getCell("E" + k).value = { formula: `SUMIFS(Pedidos!F:F,Pedidos!B:B,A${k},Pedidos!G:G,"${METODOS.efectivo.t}")`, result: t.efectivo };
     wm.getCell("F" + k).value = { formula: `SUMIFS(Pedidos!F:F,Pedidos!B:B,A${k},Pedidos!G:G,"${METODOS.transf_js.t}")`, result: t.transfJs };
     wm.getCell("G" + k).value = { formula: `SUMIFS(Pedidos!F:F,Pedidos!B:B,A${k},Pedidos!G:G,"${METODOS.transf_cliente.t}")`, result: t.transfCli };
