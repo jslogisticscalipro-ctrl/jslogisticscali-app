@@ -209,7 +209,7 @@ export interface Liquidacion {
 }
 
 /** Pago por día de patinadores y oficina, y el "sueldo previo" de una semana (id `persona_previo_semana`). */
-export interface Jornada { id: string; personaId: string; dia: string; valor: number; previo?: boolean; nota?: string }
+export interface Jornada { id: string; personaId: string; dia: string; valor: number; previo?: boolean; sinDescuento?: boolean; nota?: string }
 
 /** Entradas y salidas de la caja de la empresa (gastos, bases, adelantos, sueldos, arqueos, cuentas internas…). */
 export interface CajaMovimiento {
