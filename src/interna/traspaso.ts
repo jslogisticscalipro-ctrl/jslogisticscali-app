@@ -35,7 +35,7 @@ export async function generarQr(guia: string): Promise<QrTraspaso> {
   if (!DEMO) return api.patinador.generarQr(guia);
   const alfabeto = "0123456789ABCDEFGHJKMNPQRSTVWXYZ", codigo = Array.from({ length: 10 }, () => alfabeto[Math.floor(Math.random() * alfabeto.length)]).join("");
   for (const [c, v] of codigosDemo) if (v.guia === guia) codigosDemo.delete(c); // el anterior deja de servir
-  const vence = Date.now() + 6 * 3600_000;
+  const vence = Date.now() + 24 * 3600_000;
   codigosDemo.set(codigo, { guia, vence });
   const r = enEspera.find(x => x.guia === guia); if (r) r.codigoVence = new Date(vence).toISOString();
   return { guia, codigo, vence: new Date(vence).toISOString() };

@@ -2238,3 +2238,6 @@
 .jsl .qr-manual div{display:flex;gap:8px}
 .jsl .qr-manual input{flex:1;min-width:0;font:600 1.1rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
 .jsl .qr-nota{margin:8px 0;color:var(--suave)}
+.jsl .qr-sticker{display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.jsl .qr-auto{display:flex;align-items:center;gap:8px;font-size:.92rem;color:var(--tinta)}
+.jsl .qr-auto input{width:18px;height:18px}
