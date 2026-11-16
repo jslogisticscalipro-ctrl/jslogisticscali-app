@@ -7,6 +7,7 @@ import { useSesion, useUsuario } from "../../auth/Sesion";
 import { DEMO, datosDemo } from "../demo";
 import { Icono, IconoSalir, ProveedorVentana } from "../ui";
 import { useTema } from "../tema";
+import { OpcionInstalarApp } from "../InstalarApp";
 import { SoloCelular, VistaPatinador, useSolicitudesPendientes, type TabPatinador } from "./Vista";
 import { IconoCampana } from "../Solicitudes";
 import { CLAVE_NAV_ADMIN, leerNavegacion, usePersistedTab } from "../../hooks/usePersistedTab";
@@ -67,6 +68,7 @@ function Marco({ oscuro, cambiarTema }: { oscuro: boolean; cambiarTema: () => vo
             {perfilAbierto && <div className="perfil-popover" id="perfil-movil" role="group" aria-label="Opciones de perfil">
               <div className="perfil-info"><b>{nom}</b><small>Patinador</small></div>
               <button type="button" className="perfil-opcion" onClick={() => { cambiarTema(); setPerfilAbierto(false); }}>{oscuro ? <IconoSol /> : <IconoLuna />}<span>{oscuro ? "Modo claro" : "Modo oscuro"}</span></button>
+              <OpcionInstalarApp alAccionar={() => setPerfilAbierto(false)} />
               <button type="button" className="perfil-opcion perfil-salir" onClick={() => { setPerfilAbierto(false); void salir(); }}><IconoSalir /><span>Cerrar sesión</span></button>
             </div>}
           </div>

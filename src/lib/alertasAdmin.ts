@@ -76,6 +76,7 @@ export async function avisoRapido(mensaje: string, tono: TonoAviso = "exito") {
 export const alertaAdmin = {
   exito: (titulo: string, texto?: string) => avisoRapido(texto ? `${titulo}. ${texto}` : titulo, "exito"),
   error: async (titulo: string, texto?: string) => (await swal()).fire({ ...opcionesBase(), icon: "error", title: titulo, text: texto, confirmButtonText: "Entendido" }),
+  info: async (titulo: string, texto?: string) => (await swal()).fire({ ...opcionesBase(), icon: "info", title: titulo, text: texto, confirmButtonText: "Entendido" }),
   aviso: async (titulo: string, texto?: string) => (await swal()).fire({ ...opcionesBase(), icon: "warning", title: titulo, text: texto, confirmButtonText: "Aceptar" }),
 
   /** Pregunta antes de una acción. `peligro` pinta el botón en rojo (borrar, quitar, deshacer). */

@@ -68,6 +68,10 @@ npx -p postcss -p postcss-prefix-selector node scripts/estilos-prototipo.mjs ../
 - Si una petición responde 401 (sesión vencida, cerrada o con el rol cambiado), la app vuelve al ingreso.
 - La API se llama en el **mismo sitio** (`/api`) para que la cookie funcione con `SameSite=Lax`, también en Safari de iPhone.
 
+## App instalable (PWA)
+
+La app se puede instalar en el celular o el computador («Instalar app» en el menú de perfil, o el ícono del navegador). Es una sola instalación para todos los roles. El service worker (`public/sw.js`) solo guarda la pantalla «sin conexión» y nunca respuestas de `/api`. Detalles y reglas en `docs/ESTADO.md`.
+
 ## Correr en local
 
 ```bash
