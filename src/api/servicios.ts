@@ -1,7 +1,7 @@
 /* Llamadas al backend, agrupadas por recurso. */
 import { api } from "./cliente";
 import type { FiltroMetodoEntregas, PaginaEntregasPeriodo, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, Archivo, TipoArchivo, Cliente, ClienteBreve, Mensajero, Movimiento, Pedido, Usuario, Motivo, MetodoEntrega, Rol, TipoPersonal, Medio, EstadoPedido,
-  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos } from "./tipos";
+  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
 import { FalloApi } from "./cliente";
 
 const datos = <T>(p: Promise<{ data: T }>) => p.then(r => r.data);
@@ -149,11 +149,25 @@ export const patinador = {
   /** Solicitudes de recogida asignadas y sin recoger, por páginas. La oficina dice de cuál patinador (`mensajeroId`). */
   solicitudes: (page: number, limit: number, mensajeroId?: string) =>
     datos<PaginaSolicitudesRecogida>(api.get("/patinador/solicitudes", { params: { page, limit, ...(mensajeroId ? { mensajeroId } : {}) } })),
+  /** El patinador marca que ya tiene el paquete (la guía queda esperando al mensajero). Repetirlo no hace nada. */
+  marcarRecogido: (guia: string) => datos<{ guia: string; recogido: boolean }>(api.post(`/patinador/solicitudes/${guia}/recogido`)),
+  /** Deshace una recogida marcada por error (el patinador, unos minutos; la oficina siempre). */
+  deshacerRecogido: (guia: string) => datos<{ guia: string; recogido: boolean }>(api.delete(`/patinador/solicitudes/${guia}/recogido`)),
+  /** Recogidas que esperan a un mensajero: las del patinador, o todas (la oficina; `mensajeroId` filtra). */
+  recogidas: (mensajeroId?: string) => datos<{ data: RecogidaEnEspera[] }>(api.get("/patinador/recogidas", { params: mensajeroId ? { mensajeroId } : {} })).then(d => d.data),
+  /** Oficina: genera el QR de una guía recogida (reemplaza el anterior). */
+  generarQr: (guia: string) => datos<{ qr: QrTraspaso }>(api.post(`/patinador/recogidas/${guia}/qr`)).then(d => d.qr),
   /** Oficina: cuánto recibió cada patinador, cuánto ya entregó y cuánto debe. */
   resumen: () => datos<{ patinadores: ResumenPatinador[] }>(api.get("/patinador/resumen")).then(d => d.patinadores),
   /** Anota un pago. La hora la pone el servidor; el patinador anota en su caja y administración manda en cuál (`mensajeroId`). */
   registrar: (d: { mensajeroId?: string; clienteId: string; concepto: string; valor: number }) =>
     datos<{ registro: RegistroCajaPatinador; resumen: ResumenCajaPatinador }>(api.post("/patinador/caja", d))
+};
+
+/** El mensajero escanea el QR de una guía que recogió un patinador: primero ve de qué paquete se trata y luego se queda con él. */
+export const traspasos = {
+  vistaPrevia: (codigo: string) => datos<{ traspaso: VistaTraspaso }>(api.post("/traspasos/vista-previa", { codigo })).then(d => d.traspaso),
+  canjear: (codigo: string) => datos<{ traspaso: { guia: string; yaEsTuyo: boolean } }>(api.post("/traspasos/canjear", { codigo })).then(d => d.traspaso)
 };
 
 /** Mi caja → Entregas del período: una página, con búsqueda por guía o quien recibió y filtro por método. */

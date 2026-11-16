@@ -329,6 +329,13 @@ export interface SolicitudRecogida { guia: string; fecha: string; remitente: str
 /** Respuesta paginada de GET /patinador/solicitudes (`page` desde 1; `limit` 5 en celular y 10 en computador). */
 export interface PaginaSolicitudesRecogida { data: SolicitudRecogida[]; total: number; page: number; totalPages: number }
 
+/** Una guía que el patinador ya recogió y espera a un mensajero (GET /patinador/recogidas). `codigoVence` es la hora en que vence el QR vigente, o null si no hay. */
+export interface RecogidaEnEspera { guia: string; recogidoEn: string; patinadorId: string; patinadorNombre: string; remitente: string; direccionRecogida: string; direccionEntrega: string; destinatarioNombre: string; paquetes: number; codigoVence: string | null }
+/** El QR recién generado (POST /patinador/recogidas/:guia/qr). El código solo se ve aquí: el servidor guarda su HMAC. */
+export interface QrTraspaso { guia: string; codigo: string; vence: string }
+/** Lo que ve el mensajero al escanear, antes de confirmar (POST /traspasos/vista-previa). Sin teléfonos. */
+export interface VistaTraspaso { guia: string; remitente: string; destinatarioNombre: string; direccionEntrega: string; paquetes: number; patinadorNombre: string; vence: string; yaEsTuyo: boolean }
+
 /** Un patinador en Caja → Mensajeros (GET /patinador/resumen): lo anotado de los clientes, lo ya entregado a la oficina y lo que debe (puede ser negativo). */
 export interface ResumenPatinador { mensajeroId: string; nombre: string; activo: boolean; recibido: number; recibidoHoy: number; registros: number; entregado: number; entregadoHoy: number; debe: number }
 

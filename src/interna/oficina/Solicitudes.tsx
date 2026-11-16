@@ -6,6 +6,7 @@ import { FiltroDia, IconoFiltro, IconoInfo, Paginador, useVentana } from "../ui"
 import { mensajeDe } from "../../api/cliente";
 import type { EstadoFiltroSolicitudes, OrigenFiltroSolicitudes, Solicitud } from "../../api/tipos";
 import { hora, pesos } from "../motor";
+import RecogidasPatinador from "./RecogidasPatinador";
 import { ETQ, TarjetaSolicitud, useSolicitudesFiltradas } from "../Solicitudes";
 
 const FILTROS: [EstadoFiltroSolicitudes, string][] = [
@@ -65,6 +66,7 @@ export default function Solicitudes({ pintar }: { pintar: () => void }) {
     <header className="cab-pedidos cab-solicitudes">
       <div className="cab-pedidos-txt"><h1>Solicitudes</h1><p className="sub">Pedidos de recogida de la página web y del portal de clientes.</p></div>
     </header>
+    <RecogidasPatinador />
     <div className="sol-filtros-movil">
       <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar solicitud…" aria-label="Buscar cliente, destinatario, dirección o guía" />
       <button type="button" onClick={abrirFiltros} aria-label={`Filtros${filtrosActivos ? `, ${filtrosActivos} activos` : ""}`}><IconoFiltro /> Filtros{filtrosActivos > 0 && <b>{filtrosActivos}</b>}</button>

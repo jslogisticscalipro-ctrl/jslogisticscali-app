@@ -14,7 +14,7 @@ export function useEventos() {
       try {
         const d = JSON.parse(e.data) as { cols?: string[] };
         if (d?.cols?.includes("solicitudes")) qc.invalidateQueries({ queryKey: ["solicitudes"] });
-        if (d?.cols?.includes("pedidos")) qc.invalidateQueries({ queryKey: ["pedidos"] });
+        if (d?.cols?.includes("pedidos")) { qc.invalidateQueries({ queryKey: ["pedidos"] }); qc.invalidateQueries({ queryKey: ["patinador"] }); qc.invalidateQueries({ queryKey: ["recogidas"] }); }
       } catch { /* un evento incompleto no debe romper la pantalla */ }
     };
     es.addEventListener("cambio", alCambiar);

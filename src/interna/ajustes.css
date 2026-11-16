@@ -2214,3 +2214,27 @@
 .jsl .im-azul{color:var(--marca2)}
 .jsl .im-verde{color:var(--verde)}
 @media (max-width:359px){.jsl .im-acc{font-size:.76rem;padding:10px 8px;gap:6px}.jsl .im-falta-txt b{font-size:1.4rem}.jsl .im-mini button{padding:10px}}
+
+/* ---------- Recogida con patinador y QR de traspaso (2026-11-16) ---------- */
+.jsl .acc-recogida{display:flex;flex-direction:column;gap:8px;align-items:stretch;flex:none}
+.jsl .acc-recogida .btn{white-space:nowrap;text-align:center}
+@media (max-width:480px){.jsl .fila-recogida{flex-wrap:wrap}.jsl .fila-recogida .acc-recogida{flex-direction:row;width:100%}.jsl .fila-recogida .acc-recogida .btn{flex:1}}
+.jsl .pat-espera{margin-top:24px}
+.jsl .pat-espera h2,.jsl .rp-seccion h2{margin:0 0 4px;font-size:1.05rem}
+.jsl .rp-seccion{margin:0 0 20px;padding:14px;border-radius:20px;background:var(--papel);box-shadow:var(--sombra);min-width:0}
+.jsl .rp-fila{align-items:center;gap:12px}
+.jsl .rp-fila .info{min-width:0}
+.jsl .rp-fila .info p{overflow-wrap:anywhere}
+.jsl .qr-escanear{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:8px 0 12px}
+@media (min-width:768px){.jsl .qr-escanear{width:auto}}
+.jsl .qr-caja{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 0;text-align:center}
+.jsl .qr-caja img{background:#fff;border-radius:16px;padding:6px;max-width:100%;height:auto}
+.jsl .qr-codigo{margin:0;font:700 1.5rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--tinta)}
+.jsl .qr-visor{position:relative;aspect-ratio:1/1;max-height:60vh;width:100%;border-radius:20px;overflow:hidden;background:#0b1220;display:grid;place-items:center;margin:8px 0}
+.jsl .qr-visor video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.jsl .qr-marco{position:relative;width:62%;aspect-ratio:1/1;border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 999px rgba(2,6,23,.45)}
+.jsl .qr-capa,.jsl .qr-sin-camara{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center;color:#fff;background:rgba(2,6,23,.7);margin:0}
+.jsl .qr-manual{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.jsl .qr-manual div{display:flex;gap:8px}
+.jsl .qr-manual input{flex:1;min-width:0;font:600 1.1rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.jsl .qr-nota{margin:8px 0;color:var(--suave)}

@@ -1,7 +1,7 @@
 /* Las pantallas del patinador (Inicio, Mi caja con su historial y Solicitudes). Las usan su app (Patinador.tsx) y el modo Patinador de administración
    (DesdeOficina.tsx), que pasa `ajeno` con el patinador elegido: las cifras y lo anotado van a la caja de ese patinador. */
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownLeft, ArrowRight, CheckCircle2, ClipboardList, PackageCheck, PlusCircle, Receipt, Wallet } from "lucide-react";
 import * as api from "../../api/servicios";
 import type { CajaPatinador, FiltrosCajaPatinador, PaginaSolicitudesRecogida, RegistroCajaPatinador, SolicitudRecogida } from "../../api/tipos";
@@ -10,6 +10,8 @@ import { motivoError } from "../datos";
 import { FiltroDia, IconoFiltro, Kpi, Paginador, useVentana } from "../ui";
 import { FormPago, Lista, type Anotar } from "../pagos";
 import { diaDe, hora, pesos, S } from "../motor";
+import { recogidasEnEspera, marcarRecogido, deshacerRecogido } from "../traspaso";
+import { alertaAdmin } from "../../lib/alertasAdmin";
 import { registrosDemo, resumenDe, solicitudesRecogidaDemo } from "./demoCaja";
 import { POR_PAGINA, POR_PAGINA_RECOGIDAS, useComputador, usePorPagina, usePorPaginaRecogidas } from "../../lib/pantalla";
 
@@ -139,7 +141,16 @@ function ListaSolicitudes({ ajeno }: { ajeno?: Ajeno }) {
 }
 
 function FilaSolicitud({ s }: { s: SolicitudRecogida }) {
-  const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(s.direccionRecogida);
+  const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(s.direccionRecogida), qc = useQueryClient(), v = useVentana();
+  const [ocupado, setOcupado] = useState(false);
+  const recoger = async () => {
+    if (ocupado) return;
+    const ok = await alertaAdmin.confirmar({ titulo: "¿Ya recogiste " + s.guia + "?", texto: "Tienes el paquete de " + s.remitente + " en la mano. Después administración genera el QR para pasárselo a un mensajero.", boton: "Sí, ya lo recogí" });
+    if (!ok) return;
+    setOcupado(true);
+    try { await marcarRecogido({ guia: s.guia, remitente: s.remitente, direccionRecogida: s.direccionRecogida, direccionEntrega: s.direccionEntrega, destinatarioNombre: s.destinatarioNombre, paquetes: s.paquetes }); v.avisar(s.guia + " marcada como recogida"); await qc.invalidateQueries({ queryKey: ["patinador"] }); }
+    catch (e) { v.avisar("No se pudo marcar: " + motivoError(e)); setOcupado(false); }
+  };
   return (
     <div className="fila fila-recogida">
       <span className="info">
@@ -147,9 +158,31 @@ function FilaSolicitud({ s }: { s: SolicitudRecogida }) {
         <p>{s.direccionRecogida}</p>
         <p>{s.paquetes} {s.paquetes === 1 ? "paquete" : "paquetes"} · para {s.destinatarioNombre} · {hora(Date.parse(s.fecha))}</p>
       </span>
-      <a className="btn chico sec" href={mapa} target="_blank" rel="noopener noreferrer" aria-label={"Cómo llegar a " + s.direccionRecogida}>Cómo llegar</a>
+      <span className="acc-recogida">
+        <a className="btn chico sec" href={mapa} target="_blank" rel="noopener noreferrer" aria-label={"Cómo llegar a " + s.direccionRecogida}>Cómo llegar</a>
+        <button type="button" className="btn chico ok" disabled={ocupado} onClick={recoger} aria-label={"Marcar " + s.guia + " como recogido"}>{ocupado ? "Guardando…" : "Marcar como recogido"}</button>
+      </span>
     </div>
   );
+}
+
+/* ---- Recogidos que esperan a un mensajero: el patinador ya los tiene; administración genera el QR ---- */
+function RecogidosEnEspera({ ajeno }: { ajeno?: Ajeno }) {
+  const qc = useQueryClient(), v = useVentana();
+  const q = useQuery({ queryKey: ["patinador", "recogidas", ajeno?.id ?? "mia"], queryFn: () => recogidasEnEspera(ajeno?.id), refetchInterval: 60_000 });
+  if (!q.data?.length) return null;
+  const deshacer = async (guia: string) => {
+    if (!await alertaAdmin.confirmar({ titulo: "¿Deshacer la recogida de " + guia + "?", texto: "Vuelve a tu lista de solicitudes por recoger.", boton: "Sí, deshacer", peligro: true })) return;
+    try { await deshacerRecogido(guia); await qc.invalidateQueries({ queryKey: ["patinador"] }); } catch (e) { v.avisar("No se pudo deshacer: " + motivoError(e)); }
+  };
+  return <section className="pat-espera" aria-label="Recogidos que esperan a un mensajero">
+    <h2>Esperando al mensajero</h2>
+    <p className="sub">Ya los recogiste. Entrégalos en la oficina: administración les genera un QR para el mensajero.</p>
+    <div className="lista lista-recogidas">{q.data.map(r => <div className="fila fila-recogida" key={r.guia}>
+      <span className="info"><b className="min-w-0">{r.remitente}</b><p>{r.guia} · {r.paquetes} {r.paquetes === 1 ? "paquete" : "paquetes"} · recogido {hora(Date.parse(r.recogidoEn))}</p>
+        <p>{r.codigoVence ? "QR listo" : "Esperando el QR de administración"}</p></span>
+      <button type="button" className="btn chico sec" onClick={() => deshacer(r.guia)}>Deshacer</button></div>)}</div>
+  </section>;
 }
 
 function Solicitudes({ ajeno }: { ajeno?: Ajeno }) {
@@ -157,6 +190,7 @@ function Solicitudes({ ajeno }: { ajeno?: Ajeno }) {
     <h1>Solicitudes</h1>
     <p className="sub">{ajeno ? `Recogidas pendientes de ${ajeno.nombre}` : "Los paquetes que la oficina te asignó para recoger."}{ajeno?.cambiar}</p>
     <ListaSolicitudes ajeno={ajeno} />
+    <RecogidosEnEspera ajeno={ajeno} />
   </>;
 }
 
