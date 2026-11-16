@@ -3,6 +3,9 @@
 import * as api from "../api/servicios";
 import type { QrTraspaso, RecogidaEnEspera, VistaTraspaso } from "../api/tipos";
 import { DEMO } from "./demo";
+import { yo } from "./motor";
+/** La oficina (modo Mensajero) dice a nombre de quién se recibe; el mensajero no manda nada: el servidor usa su cuenta. */
+export const aNombreDe = (mensajeroId: string) => (yo.esAdmin || yo.esAsistente ? mensajeroId : undefined);
 
 /** Lo que se dibuja dentro del QR: un enlace con el código (la cámara del celular lo abre) y no los datos del pedido. */
 export const textoQr = (codigo: string) => `${location.origin}/?qr=${codigo}`;
@@ -46,8 +49,8 @@ const buscarDemo = (codigo: string) => {
   if (!v || v.vence <= Date.now()) throw new Error("Ese código no sirve o ya venció. Pídele a administración uno nuevo.");
   return enEspera.find(x => x.guia === v.guia)!;
 };
-export async function vistaPreviaQr(codigo: string): Promise<VistaTraspaso> {
-  if (!DEMO) return api.traspasos.vistaPrevia(codigo);
+export async function vistaPreviaQr(codigo: string, mensajeroId: string): Promise<VistaTraspaso> {
+  if (!DEMO) return api.traspasos.vistaPrevia(codigo, aNombreDe(mensajeroId));
   const r = buscarDemo(codigo);
   return { guia: r.guia, remitente: r.remitente, destinatarioNombre: r.destinatarioNombre, direccionEntrega: r.direccionEntrega, paquetes: r.paquetes, patinadorNombre: r.patinadorNombre, vence: r.codigoVence ?? "", yaEsTuyo: false };
 }

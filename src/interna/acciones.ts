@@ -8,7 +8,7 @@ import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo
 import { aPedido, aPersona } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
-import { canjearDemo } from "./traspaso";
+import { canjearDemo, aNombreDe } from "./traspaso";
 
 type Tocar = (fn?: (s: Almacen) => void) => void;
 let tocar: Tocar = () => {};
@@ -71,7 +71,7 @@ export async function canjearQr(codigo: string, mensajeroId: string) {
       solicitud: { direccionRecogida: r.direccionRecogida, direccionEntrega: r.direccionEntrega, destinatarioNombre: r.destinatarioNombre, destinatarioTelefono: "", paquetes: r.paquetes } }; });
     return r.guia;
   }
-  const t = await api.traspasos.canjear(codigo);
+  const t = await api.traspasos.canjear(codigo, aNombreDe(mensajeroId));
   ponerPedido(await api.pedidos.obtener(t.guia));
   return t.guia;
 }

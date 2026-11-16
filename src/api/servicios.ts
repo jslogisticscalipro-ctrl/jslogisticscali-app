@@ -166,8 +166,8 @@ export const patinador = {
 
 /** El mensajero escanea el QR de una guía que recogió un patinador: primero ve de qué paquete se trata y luego se queda con él. */
 export const traspasos = {
-  vistaPrevia: (codigo: string) => datos<{ traspaso: VistaTraspaso }>(api.post("/traspasos/vista-previa", { codigo })).then(d => d.traspaso),
-  canjear: (codigo: string) => datos<{ traspaso: { guia: string; yaEsTuyo: boolean } }>(api.post("/traspasos/canjear", { codigo })).then(d => d.traspaso)
+  vistaPrevia: (codigo: string, mensajeroId?: string) => datos<{ traspaso: VistaTraspaso }>(api.post("/traspasos/vista-previa", { codigo, ...(mensajeroId ? { mensajeroId } : {}) })).then(d => d.traspaso),
+  canjear: (codigo: string, mensajeroId?: string) => datos<{ traspaso: { guia: string; yaEsTuyo: boolean } }>(api.post("/traspasos/canjear", { codigo, ...(mensajeroId ? { mensajeroId } : {}) })).then(d => d.traspaso)
 };
 
 /** Mi caja → Entregas del período: una página, con búsqueda por guía o quien recibió y filtro por método. */

@@ -21,7 +21,7 @@ export function DlgEscanearQr({ mensajeroId }: { mensajeroId: string }) {
   const revisar = async (texto: string) => {
     const c = codigoDe(texto); if (!c) return;
     setFase("buscando"); setError("");
-    try { const d = await vistaPreviaQr(c); if (!montado.current) return; setCodigo(c); setDatos(d); setFase("vista"); }
+    try { const d = await vistaPreviaQr(c, mensajeroId); if (!montado.current) return; setCodigo(c); setDatos(d); setFase("vista"); }
     catch (e) { if (!montado.current) return; setError(motivoError(e)); setFase("leyendo"); }
   };
   const revisarRef = useRef(revisar); revisarRef.current = revisar;
@@ -31,7 +31,8 @@ export function DlgEscanearQr({ mensajeroId }: { mensajeroId: string }) {
     montado.current = true;
     let parar = false, flujo: MediaStream | null = null, cuadro = 0;
     (async () => {
-      if (!navigator.mediaDevices?.getUserMedia) { setAviso("Este celular no deja abrir la cámara aquí. Escribe el código que aparece debajo del QR."); return; }
+      if (!window.isSecureContext) { setAviso("La cámara solo funciona en la página segura (https). Abre la app desde su dirección oficial o escribe el código que aparece debajo del QR."); return; }
+      if (!navigator.mediaDevices?.getUserMedia) { setAviso("Este navegador no deja abrir la cámara aquí. Escribe el código que aparece debajo del QR."); return; }
       try {
         flujo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
         if (parar) { flujo.getTracks().forEach(t => t.stop()); return; }
@@ -52,8 +53,12 @@ export function DlgEscanearQr({ mensajeroId }: { mensajeroId: string }) {
         };
         cuadro = requestAnimationFrame(leer);
       } catch (e) {
-        const negado = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
-        setAviso(negado ? "No diste permiso para usar la cámara. Actívalo en el navegador o escribe el código." : "No se pudo abrir la cámara. Escribe el código que aparece debajo del QR.");
+        const nombre = e instanceof DOMException ? e.name : "";
+        setAviso(nombre === "NotAllowedError" || nombre === "SecurityError"
+          ? "El navegador no tiene permiso para usar la cámara. En Chrome toca el candado (o los tres puntos → Configuración del sitio) junto a la dirección, elige Cámara → Permitir y vuelve a abrir esta ventana. Mientras tanto puedes escribir el código."
+          : nombre === "NotFoundError" ? "Este dispositivo no tiene cámara disponible. Escribe el código que aparece debajo del QR."
+          : nombre === "NotReadableError" ? "Otra app está usando la cámara. Ciérrala y vuelve a abrir esta ventana, o escribe el código."
+          : "No se pudo abrir la cámara. Escribe el código que aparece debajo del QR.");
       }
     })();
     return () => { parar = true; montado.current = false; cancelAnimationFrame(cuadro); flujo?.getTracks().forEach(t => t.stop()); };
