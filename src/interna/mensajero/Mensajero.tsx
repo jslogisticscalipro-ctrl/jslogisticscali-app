@@ -19,6 +19,7 @@ import { EntregasPeriodo } from "./EntregasPeriodo";
 import { abrirEntregaEn, VerEntregado } from "./Entrega";
 import { DlgNuevaGuia } from "./NuevaGuia";
 import { DlgRecoger } from "./Recoger";
+import { DlgEscanearQr } from "./EscanearQr";
 import { pendientesMios, porRecogerMios, devolucionesPorDefinirMios } from "./pendientes";
 import { DlgDestinoDev } from "./Reintento";
 import type { Medio, Pedido } from "../motor";
@@ -243,6 +244,7 @@ function HistorialRecepcion({ mid, escritorio = false }: { mid: string; escritor
 }
 
 /* ---- Pedidos del mensajero: Todos, Por entregar (en ruta) y Por recoger (guías de solicitudes sin foto) ---- */
+const IconoQr = () => <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10" /></svg>;
 function PedidosMensajero({ pintar }: { pintar: () => void }) {
   const ventana = useVentana(), barra = useRef<HTMLDivElement>(null);
   const entregar = pendientesMios().filter(p => delDia(p, E.diaPedM)), recoger = porRecogerMios().filter(p => delDia(p, E.diaPedM)), porDefinir = devolucionesPorDefinirMios();
@@ -265,6 +267,7 @@ function PedidosMensajero({ pintar }: { pintar: () => void }) {
   return <>
     <h1>Pedidos</h1>
     <p className="sub">{entregar.length} en ruta · {recoger.length} por recoger{E.diaPedM ? " de ese día" : ""}</p>
+    <button type="button" className="btn sec qr-escanear" onClick={() => ventana.abrir(<DlgEscanearQr mensajeroId={E.miMensajero} />, "centrada")}><IconoQr />Escanear QR de un paquete</button>
     {porDefinir.length > 0 && <section className="aviso alerta" aria-label="Devoluciones por confirmar">
       <b>{porDefinir.length === 1 ? "Tienes 1 devolución por confirmar" : "Tienes " + porDefinir.length + " devoluciones por confirmar"}</b>
       <span className="sub"> Cuéntanos dónde quedó el paquete: con el cliente, en la oficina o si harás el reintento.</span>

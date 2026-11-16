@@ -8,6 +8,7 @@ import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo
 import { aPedido, aPersona } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
+import { canjearDemo } from "./traspaso";
 
 type Tocar = (fn?: (s: Almacen) => void) => void;
 let tocar: Tocar = () => {};
@@ -57,6 +58,22 @@ export async function recoger(guia: string, f: File) {
   await api.pedidos.subirArchivo(guia, "salida", foto);
   await api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {});
   ponerPedido(await api.pedidos.recoger(guia));
+}
+
+/** El mensajero se queda con una guía que recogió un patinador (escaneó su QR). La guía ya existía: no se crea otra. Sigue "por recoger",
+    así que el siguiente paso es "Recoger" con la foto del paquete. Devuelve la guía. */
+export async function canjearQr(codigo: string, mensajeroId: string) {
+  if (DEMO) {
+    const r = canjearDemo(codigo), n = Number(r.guia.slice(3)) || Math.max(0, ...Object.values(S.pedidos).map(p => p.n)) + 1;
+    tocar(s => { s.pedidos[r.guia] = { guia: r.guia, n, estado: "aceptado", creado: Date.now(), entregado: null, mensajeroId, clienteId: "", clienteNombre: r.remitente, valorServicio: 8000, aCobrar: 0,
+      destinatario: "", valorCobrado: 0, metodo: "", cuentaJs: "", difCobro: 0, difRevisada: false, motivoDev: "", notaDev: "", cobrarDev: false, cambio: false, cambioRecibido: null,
+      gasto: 0, gastoNota: "", domiPagado: false, domiPagoMedio: "", domiPagoValor: null, domiPagoFecha: 0, domiPagoUid: "", intentos: [], mini: "",
+      solicitud: { direccionRecogida: r.direccionRecogida, direccionEntrega: r.direccionEntrega, destinatarioNombre: r.destinatarioNombre, destinatarioTelefono: "", paquetes: r.paquetes } }; });
+    return r.guia;
+  }
+  const t = await api.traspasos.canjear(codigo);
+  ponerPedido(await api.pedidos.obtener(t.guia));
+  return t.guia;
 }
 
 /** Remitentes que coinciden con lo escrito (desde 2 letras). El mensajero solo recibe nombre e id. */
