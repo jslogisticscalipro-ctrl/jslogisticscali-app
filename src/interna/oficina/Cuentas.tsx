@@ -80,6 +80,10 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const R = useMemo(() => (enCuentas ? resumenCaja() : null), [enCuentas, version, pinta]);
   const cs = useMemo(() => listaOrdenada(S.cuentas, "nombre").map(cu => ({ cu, t: textoCuenta(cu) })), [version, pinta]);
   const [creando, setCreando] = useState(false);
+  // Id del movimiento que se está quitando o reversando: su botón queda desactivado hasta que responda el servidor,
+  // para que un segundo toque con la red lenta no reverse dos veces el mismo pago.
+  const [ocupado, setOcupado] = useState("");
+  const conOcupado = async (id: string, fn: () => Promise<unknown>) => { setOcupado(id); try { await fn(); } finally { setOcupado(""); } };
   const poner = (cambio: Partial<typeof E>) => { Object.assign(E, cambio); pintar(); };
   const semilla = async () => {
     setCreando(true);
@@ -89,16 +93,16 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const quitarCu = async (id: string) => {
     if (yaContado(S.cajamovs[id]?.fecha)) return avisoContado(v);
     if (!await v.confirmar("Quitar movimiento", "Se borra de la cuenta y de la caja.", "Quitar")) return;
-    try { await borrarDe("cajamovs", id); v.avisar("Movimiento quitado"); } catch (e) { v.avisar("No se pudo quitar: " + motivoError(e)); }
+    await conOcupado(id, async () => { try { await borrarDe("cajamovs", id); v.avisar("Movimiento quitado"); } catch (e) { v.avisar("No se pudo quitar: " + motivoError(e)); } });
   };
   const quitarMx = async (m: Movimiento) => {
     if (mueveCaja(m) && yaContado(m.fecha) && !esPago(m)) return avisoContado(v);
     if (esPago(m) && yaContado(m.fecha)) {
       if (!await v.confirmar("Reversar pago", `${nombreCliente(m.clienteId) || "Cliente"} · ${pesos(m.valor)}. Ya se contó en un arqueo: se registra hoy un pago contrario por el mismo valor.`, "Reversar")) return;
-      try { await reversarPago(m); v.avisar("Pago reversado"); } catch (e) { v.avisar("No se pudo reversar: " + motivoError(e)); } return;
+      await conOcupado(m.id, async () => { try { await reversarPago(m); v.avisar("Pago reversado"); } catch (e) { v.avisar("No se pudo reversar: " + motivoError(e)); } }); return;
     }
     if (!await v.confirmar("Quitar " + (m.tipo === "ganancia" ? "ganancia" : esPago(m) ? "pago" : "compra"), `${nombreCliente(m.clienteId) || "Cliente"} · ${pesos(m.valor)}. Se quita de la cuenta del cliente${m.tipo === "ganancia" ? " y del sueldo de JS" : " y de la caja"}.`, "Quitar")) return;
-    try { await borrarDe("movimientos", m.id); v.avisar("Movimiento quitado"); } catch (e) { v.avisar("No se pudo quitar: " + motivoError(e)); }
+    await conOcupado(m.id, async () => { try { await borrarDe("movimientos", m.id); v.avisar("Movimiento quitado"); } catch (e) { v.avisar("No se pudo quitar: " + motivoError(e)); } });
   };
   const tipoTxt = (m: Movimiento) => m.tipo === "pago_de_cliente" ? `Pago · ${MEDIOS[m.medio as Medio] || ""}` : m.tipo === "pago_a_cliente" ? `Le pagó · ${MEDIOS[m.medio as Medio] || ""}` : m.tipo === "ganancia" ? "Ganancia JS" : "Compra" + (m.medio ? ` · ${MEDIOS[m.medio as Medio] || ""}` : "");
 
@@ -195,7 +199,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
             {movs.map(c => <tr key={c.id}><td className="col-fecha">{hora(c.fecha)}</td><td>{S.cuentas[c.cuentaId || ""]?.nombre || "—"}</td><td>{c.concepto || ""}</td><td>{MEDIOS[c.medio as Medio] || ""}</td><td className={"n " + (c.tipo === "entra" ? "pos" : "neg")}>{c.tipo === "entra" ? "+ " : "− "}{pesos(c.valor)}</td>
               {yo.esAdmin && <td className="col-acciones"><div className="acciones-celda">
                 <span className="accion-icono peligro">
-                  <button type="button" onClick={() => quitarCu(c.id)} aria-label="Quitar movimiento"><Icono n="papelera" /></button>
+                  <button type="button" disabled={!!ocupado} onClick={() => quitarCu(c.id)} aria-label="Quitar movimiento"><Icono n="papelera" /></button>
                   <span className="accion-tip" role="tooltip"><i /><span>Quitar movimiento</span></span>
                 </span>
               </div></td>}</tr>)}
@@ -233,7 +237,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
         : filas.length ? <>
           <div className="tabla-env" aria-busy={qMovs.isFetching} style={qMovs.isPlaceholderData ? { opacity: .6 } : undefined}><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Detalle</th><th>Registró</th><th className="n">Valor</th><th></th></tr></thead><tbody>
             {filas.map(m => <tr key={m.id}><td>{hora(m.fecha)}</td><td>{nombreCliente(m.clienteId) || "—"}</td><td>{tipoTxt(m)}{medioAntes(m)}</td><td>{m.nota || ""}</td><td>{m.porNombre || ""}</td><td className="n">{pesos(m.valor)}</td>
-              {yo.esAdmin ? <td style={{ whiteSpace: "nowrap" }}><button className="btn sec chico" onClick={() => editar(v, m)}>Editar</button> <button className="btn peligro chico" onClick={() => quitarMx(m)}>Quitar</button></td>
+              {yo.esAdmin ? <td style={{ whiteSpace: "nowrap" }}><button className="btn sec chico" onClick={() => editar(v, m)}>Editar</button> <button className="btn peligro chico" disabled={!!ocupado} onClick={() => quitarMx(m)}>{ocupado === m.id ? "Guardando…" : "Quitar"}</button></td>
                 : <td>{m.tipo !== "ganancia" && puedoCambiarMedio(m) ? <button className="btn sec chico" onClick={() => (yaContado(m.fecha) ? avisoContado(v) : v.abrir(<CambiarMedio col="movimientos" id={m.id} />, "centrada"))}>Cambiar medio</button> : null}</td>}</tr>)}
           </tbody></table></div>
           <Paginador pagina={pag.pagina} paginas={pag.paginas} total={pag.total} porPagina={pag.porPagina} ir={irMovs} cargando={qMovs.isPlaceholderData} />
@@ -306,15 +310,18 @@ function MovCuenta({ id, tipo }: { id: string; tipo: "entra" | "sale" }) {
 interface Escrito { cid: string; val: string; medio: string; dia: string; nota: string }
 /** Pago de un cliente, pago a un cliente, compra por encargo o ganancia ocasional. mov: el movimiento a editar (solo administración). */
 export function MovClienteOficina({ tipo, mov, pre }: { tipo: TipoMov; mov?: Movimiento; pre?: Escrito }) {
-  const v = useVentana(), cs = listaOrdenada(S.clientes, "nombre");
+  const v = useVentana(), { version, pinta } = useDatos();
+  // El saldo del cliente y la caja del asistente recorren guías y movimientos: se calculan cuando cambian los datos o el
+  // cliente elegido, no con cada tecla que se escribe en el formulario. `S` se cambia en sitio: avisan `version`/`pinta`.
+  const cs = useMemo(() => listaOrdenada(S.clientes, "nombre"), [version, pinta]);
   const compra = tipo === "compra_cliente", pago = tipo === "pago_de_cliente", pagoA = tipo === "pago_a_cliente";
   const conMedio = compra || pago || pagoA, soloHoy = (pago || pagoA) && !yo.esAdmin; // los pagos que registra el asistente quedan con la hora del momento
-  const miCaja = yo.esAsistente && yo.uid ? cajaOficina(yo.uid).saldo : null;
+  const miCaja = useMemo(() => (yo.esAsistente && yo.uid ? cajaOficina(yo.uid).saldo : null), [version, pinta]);
   const v0: Escrito = pre || (mov ? { cid: mov.clienteId, val: String(mov.valor), medio: mov.medio, dia: diaDe(mov.fecha), nota: mov.nota } : { cid: "", val: "", medio: compra ? "efectivo" : "", dia: hoy(), nota: "" });
   const [x, setX] = useState<Escrito>(v0), [bus, setBus] = useState(""), [guardando, setGuardando] = useState(false);
   const titulo = pago ? (mov ? "Editar pago" : "Pago de un cliente") : pagoA ? (mov ? "Editar pago al cliente" : "Pagarle a un cliente") : compra ? (mov ? "Editar compra" : "Compra para un cliente") : mov ? "Editar ganancia ocasional" : "Ganancia ocasional";
   const q = sinTildes(bus.trim()), vis = cs.filter(c => !q || sinTildes(c.nombre + " " + (c.telefono || "")).includes(q));
-  const s = x.cid ? saldoCliente(x.cid) : 0;
+  const s = useMemo(() => (x.cid ? saldoCliente(x.cid) : 0), [x.cid, version, pinta]);
   const elegir = (cid: string) => {
     const sc = cid ? saldoCliente(cid) : 0; let val = x.val;
     if (!mov && cid && !val) { if (pago && sc < 0) val = String(-sc); if (pagoA && sc > 0) val = String(sc); }
@@ -345,6 +352,6 @@ export function MovClienteOficina({ tipo, mov, pre }: { tipo: TipoMov; mov?: Mov
       {conMedio && <div className="campo"><label htmlFor="mxMedio">{pago ? "¿Cómo pagó?" : pagoA ? "¿Cómo le pagas?" : "Pagado con"}</label><select id="mxMedio" value={x.medio} onChange={e => setX({ ...x, medio: e.target.value })}>{pago || pagoA ? <option value="">Elige…</option> : null}{MEDIOS_K.map(k => <option key={k} value={k}>{MEDIOS[k]}</option>)}</select></div>}</div>
     <div className="linea2">{!soloHoy && <div className="campo"><label htmlFor="mxDia">Día</label><input id="mxDia" type="date" value={x.dia || hoy()} max={hoy()} onChange={e => setX({ ...x, dia: e.target.value })} /></div>}
       <div className="campo"><label htmlFor="mxNota">Detalle</label><input id="mxNota" value={x.nota} onChange={e => setX({ ...x, nota: e.target.value })} placeholder={pago ? "Ej: comprobante Nequi 4521" : pagoA ? "Ej: entregado en oficina" : compra ? "Ej: compra en almacén · guía JS-00120" : "Ej: 3 puntos extra · guía JS-00120"} /></div></div>
-    <button className="btn form-guardar" id="mxGuardar" disabled={guardando} onClick={guardar}>{mov ? "Guardar cambios" : pago || pagoA ? "Registrar pago" : "Registrar"}</button>
+    <button className="btn form-guardar" id="mxGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : mov ? "Guardar cambios" : pago || pagoA ? "Registrar pago" : "Registrar"}</button>
   </div>;
 }
