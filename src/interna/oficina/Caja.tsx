@@ -374,11 +374,12 @@ const resumenArqueo = (a: Arqueo) => { const n = netoArqueo(a); return n < 0 ? "
 const pildoraArqueo = (a: Arqueo) => <span className={"aq-pildora " + estadoDeArqueo(a)}>{resumenArqueo(a)}</span>;
 
 function Arqueos() {
-  const v = useVentana(), todos = arqueosCaja(), ultimoId = todos[0]?.id;
+  const v = useVentana(), { version, pinta } = useDatos(), todos = useMemo(() => arqueosCaja(), [version, pinta]), ultimoId = todos[0]?.id;
+  const [deshaciendo, setDeshaciendo] = useState(false);
   const [texto, setTexto] = useState(""), [estado, setEstado] = useState<EstadoArqueo>("todos"), [dia, setDia] = useState(""), [filtros, setFiltros] = useState(false), [borrador, setBorrador] = useState({ estado: "todos" as EstadoArqueo, dia: "" }), [visibles, setVisibles] = useState(10);
   const q = sinTildes(texto.trim());
-  const lista = todos.filter(a => (estado === "todos" || estadoDeArqueo(a) === estado) && (!dia || diaDe(a.fecha) === dia)
-    && (!q || sinTildes([a.por, a.nota, resultadoArqueo(a)].join(" ")).includes(q)));
+  const lista = useMemo(() => todos.filter(a => (estado === "todos" || estadoDeArqueo(a) === estado) && (!dia || diaDe(a.fecha) === dia)
+    && (!q || sinTildes([a.por, a.nota, resultadoArqueo(a)].join(" ")).includes(q))), [todos, estado, dia, q]);
   const activos = Number(estado !== "todos") + Number(!!dia), hay = activos > 0 || !!q;
   const limpiar = () => { setTexto(""); setEstado("todos"); setDia(""); setVisibles(10); };
   const abrirFiltros = () => { setBorrador({ estado, dia }); setFiltros(true); };
@@ -409,7 +410,7 @@ function Arqueos() {
             {MEDIOS_K.map(k => <td className="n" key={k}><b>{a.contado ? pesos(a.contado[k]) : "—"}</b><br /><span className="sub" style={{ fontSize: ".8rem" }}>{a.esperado ? pesos(a.esperado[k]) : ""}</span></td>)}
             <td>{pildoraArqueo(a)}</td><td><b style={{ fontSize: ".8rem" }}>{a.por || ""}</b></td>
             <td className="aq-acciones"><button type="button" className="btn sec chico" title="Ver detalle" aria-label={"Ver el detalle del arqueo del " + hora(a.fecha)} onClick={() => ver(a.id)}><Eye size={14} aria-hidden="true" /><span className="aq-txt">Ver detalle</span></button>
-              {a.id === ultimoId ? <button type="button" className="btn peligro chico" title="Deshacer" aria-label="Deshacer el último arqueo" onClick={() => deshacerArqueoConfirmado(v, a.id)}><RotateCcw size={14} aria-hidden="true" /><span className="aq-txt">Deshacer</span></button> : null}</td></tr>)}
+              {a.id === ultimoId ? <button type="button" className="btn peligro chico" title="Deshacer" aria-label="Deshacer el último arqueo" disabled={deshaciendo} onClick={() => deshacerArqueoConfirmado(v, a.id, setDeshaciendo)}><RotateCcw size={14} aria-hidden="true" /><span className="aq-txt">Deshacer</span></button> : null}</td></tr>)}
         </tbody></table></div>
         <ul className="aq-lista" aria-label="Arqueos">
           {lista.slice(0, visibles).map(a => <li key={a.id}><button type="button" onClick={() => ver(a.id)} aria-label={"Ver el arqueo del " + hora(a.fecha)}>
@@ -422,17 +423,18 @@ function Arqueos() {
   </>;
 }
 
-async function deshacerArqueoConfirmado(v: ReturnType<typeof useVentana>, id: string) {
+async function deshacerArqueoConfirmado(v: ReturnType<typeof useVentana>, id: string, enCurso: (b: boolean) => void = () => {}) {
   const a = arqueosCaja().find(x => x.id === id); if (!a) return;
   if (!await v.confirmar("Deshacer el arqueo del " + hora(a.fecha), "Se quitan el conteo y su faltante o sobrante. La caja vuelve a quedar abierta hasta el arqueo anterior.", "Deshacer")) return;
-  try { await deshacerArqueo(id); v.avisar("Arqueo deshecho"); v.cerrar(); } catch (e) { noSePudo(v, "No se pudo deshacer")(e); }
+  enCurso(true);
+  try { await deshacerArqueo(id); v.avisar("Arqueo deshecho"); v.cerrar(); } catch (e) { noSePudo(v, "No se pudo deshacer")(e); } finally { enCurso(false); }
 }
 
 function DetalleArqueo({ id }: { id: string }) {
-  useDatos();
-  const v = useVentana(), a = arqueosCaja().find(x => x.id === id);
+  const { version, pinta } = useDatos(), v = useVentana(), [deshaciendo, setDeshaciendo] = useState(false);
+  const todos = useMemo(() => arqueosCaja(), [version, pinta]), a = todos.find(x => x.id === id);
   if (!a) return <div className="vacio">Este arqueo ya no existe.</div>;
-  const est = estadoDeArqueo(a), n = netoArqueo(a), puede = arqueosCaja()[0]?.id === id;
+  const est = estadoDeArqueo(a), n = netoArqueo(a), puede = todos[0]?.id === id;
   const titulo = n < 0 ? "Faltó " + pesos(-n) + " en total" : n > 0 ? "Sobró " + pesos(n) + " en total" : Object.values(a.dif).some(x => Math.round(x)) ? resultadoArqueo(a) : "La plata da exacto";
   return <div className="entrega-modal liq-modal aq-modal">
     <header className="entrega-cab"><div className="liq-titulo"><h2>Detalle de arqueo</h2><p>{hora(a.fecha)}{a.por ? " · Contó: " : ""}{a.por ? <b>{a.por}</b> : null}</p></div>
@@ -445,7 +447,7 @@ function DetalleArqueo({ id }: { id: string }) {
         <div className="aq-cifras"><div><small>Contado real</small><b>{a.contado ? pesos(a.contado[k]) : "—"}</b></div><div><small>Esperado por la app</small><span>{a.esperado ? pesos(a.esperado[k]) : "—"}</span></div></div></section>; })}
     </div>
     {puede && <footer className="liq-pie"><p>Solo el último arqueo registrado se puede revertir.</p>
-      <button type="button" className="btn peligro chico" onClick={() => deshacerArqueoConfirmado(v, id)}><RotateCcw size={14} aria-hidden="true" /> Deshacer este arqueo</button></footer>}
+      <button type="button" className="btn peligro chico" disabled={deshaciendo} onClick={() => deshacerArqueoConfirmado(v, id, setDeshaciendo)}><RotateCcw size={14} aria-hidden="true" /> {deshaciendo ? "Guardando…" : "Deshacer este arqueo"}</button></footer>}
   </div>;
 }
 

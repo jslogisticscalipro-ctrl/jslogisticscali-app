@@ -426,10 +426,13 @@ export function resultadoArqueo(a: Arqueo) {
 }
 /** Lo que la app espera en el arqueo: la caja general menos el efectivo de las cajas de oficina (Nequi y Bancolombia son las mismas cuentas de la empresa). */
 export function esperadoArqueo() {
-  const R = resumenCaja(), of: Record<Medio, number> = { efectivo: 0, nequi: 0, bancolombia: 0 };
+  // Solo hace falta el total por medio del libro de caja: `resumenCaja` además calcula el saldo de cada cliente, los sueldos y el período
+  // de cada mensajero, que el arqueo no usa (daba el mismo `porMedio`, pero mucho más lento).
+  const porMedio: Record<string, number> = {}; for (const x of libroCaja()) porMedio[x.medio] = (porMedio[x.medio] || 0) + x.valor;
+  const of: Record<Medio, number> = { efectivo: 0, nequi: 0, bancolombia: 0 };
   if (yo.esAdmin) asistentes().forEach(u => { of.efectivo += cajaOficina(u.uid).saldo.efectivo; });
-  const e: Record<string, number> = {}; for (const k of Object.keys(MEDIOS) as Medio[]) e[k] = Math.round((R.porMedio[k] || 0) - of[k]);
-  return { e, of, sinCuenta: Math.round(R.porMedio.cuentas || 0) };
+  const e: Record<string, number> = {}; for (const k of Object.keys(MEDIOS) as Medio[]) e[k] = Math.round((porMedio[k] || 0) - of[k]);
+  return { e, of, sinCuenta: Math.round(porMedio.cuentas || 0) };
 }
 export interface LineaCaja { fecha: number; concepto: string; valor: number; medio: string; cat: string; ref?: string }
 export function libroCaja(): LineaCaja[] {
