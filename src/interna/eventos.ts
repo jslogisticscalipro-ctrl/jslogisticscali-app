@@ -13,7 +13,7 @@ export function useEventos() {
     const alCambiar = (e: MessageEvent) => {
       try {
         const d = JSON.parse(e.data) as { cols?: string[] };
-        if (d?.cols?.includes("solicitudes")) qc.invalidateQueries({ queryKey: ["solicitudes"] });
+        if (d?.cols?.includes("solicitudes")) qc.invalidateQueries({ queryKey: ["solicitudes"] }, { cancelRefetch: false }); // si ya hay un refresco en curso (por la acción de esta pantalla), no se repite
         if (d?.cols?.includes("pedidos")) { qc.invalidateQueries({ queryKey: ["pedidos"] }); qc.invalidateQueries({ queryKey: ["patinador"] }); qc.invalidateQueries({ queryKey: ["recogidas"] }); }
       } catch { /* un evento incompleto no debe romper la pantalla */ }
     };

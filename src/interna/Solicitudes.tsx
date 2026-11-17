@@ -2,9 +2,9 @@
    domicilio (se le avisa al cliente por WhatsApp), marca cuándo el cliente está de acuerdo y las asigna a un mensajero. */
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as api from "../api/servicios";
-import type { Solicitud, ListaSolicitudes, ConteoSolicitudes, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, EstadoFiltroSolicitudes } from "../api/tipos";
+import type { Solicitud, EstadoSolicitud, ListaSolicitudes, ConteoSolicitudes, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, EstadoFiltroSolicitudes } from "../api/tipos";
 import { mensajeDe } from "../api/cliente";
 import { DEMO } from "./demo";
 import { S, hora, pesos, linkWhatsApp, telWhatsApp } from "./motor";
@@ -106,6 +106,27 @@ function PanelSolicitudes() {
 /** ¿La pidió un cliente con cuenta desde su portal y tiene un domicilio asignado? */
 const tarifaDe = (s: Solicitud) => (s.origen === "portal" && s.clienteId && s.clienteTarifa ? s.clienteTarifa : 0);
 
+/** Pone en el caché la solicitud que respondió el servidor, para que las listas y el contador de la campanita cambien
+    al instante. Después se refrescan en segundo plano (sin esperar) para cuadrar los conteos y los filtros. */
+function aplicarSolicitud(qc: QueryClient, antes: EstadoSolicitud, nueva: Solicitud) {
+  const abierta = (e: string) => e === "pendiente" || e === "cotizada" || e === "confirmada";
+  qc.setQueryData<ListaSolicitudes>(CLAVE, old => {
+    if (!old) return old;
+    const conteo = { ...old.conteo };
+    if (antes !== nueva.estado) {
+      if (abierta(antes)) conteo[antes as keyof ConteoSolicitudes] = Math.max(0, conteo[antes as keyof ConteoSolicitudes] - 1);
+      if (abierta(nueva.estado)) conteo[nueva.estado as keyof ConteoSolicitudes] += 1;
+    }
+    const solicitudes = old.solicitudes.filter(x => x.id !== nueva.id);
+    if (abierta(nueva.estado)) solicitudes.push(nueva);
+    solicitudes.sort((a, b) => b.creado.localeCompare(a.creado));
+    return { solicitudes, conteo };
+  });
+  qc.setQueriesData<PaginaSolicitudesFiltradas>({ queryKey: ["solicitudes", "filtradas"] }, old =>
+    old ? { ...old, data: old.data.map(x => (x.id === nueva.id ? nueva : x)) } : old);
+  void qc.invalidateQueries({ queryKey: ["solicitudes"] }, { cancelRefetch: false });
+}
+
 export const ETQ: Record<string, [string, string]> = { pendiente: ["sin", "Nueva"], cotizada: ["pend", "Esperando al cliente"], confirmada: ["ent", "Cliente de acuerdo"], asignada: ["ent", "Asignada"], rechazada: ["gris", "Rechazada"] };
 
 export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Solicitud; enDetalle?: boolean; alCompletar?: () => void }) {
@@ -121,35 +142,40 @@ export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Sol
   const [rechazando, setRechazando] = useState(false), [motivo, setMotivo] = useState("");
   const mensajeros = Object.values(S.mensajeros).filter(m => m.tipo === "mensajero" || m.tipo === "patinador");
 
-  const correr = async (fn: () => Promise<unknown>, aviso: string) => {
-    setOcupado(true); setError("");
-    try { await fn(); await qc.invalidateQueries({ queryKey: ["solicitudes"] }); v.avisar(aviso); alCompletar?.(); }
+  // `haciendo` dice qué acción está en curso, para que el botón muestre "Guardando…" y no se pulse dos veces.
+  const [haciendo, setHaciendo] = useState("");
+  const correr = async (accion: string, fn: () => Promise<Solicitud>, aviso: string) => {
+    setOcupado(true); setHaciendo(accion); setError("");
+    try { const nueva = await fn(); aplicarSolicitud(qc, s.estado, nueva); v.avisar(aviso); alCompletar?.(); }
     catch (e) { setError(mensajeDe(e)); }
-    finally { setOcupado(false); }
+    finally { setOcupado(false); setHaciendo(""); }
   };
+  const texto = (accion: string, normal: string, enCurso: string) => (haciendo === accion ? enCurso : normal);
   const monto = Number(valor.replace(/\D/g, "")) || 0;
   // El servidor decide el paso siguiente: con el domicilio de siempre del cliente queda lista para asignar.
   const aceptar = async () => {
-    setOcupado(true); setError("");
+    setOcupado(true); setHaciendo("aceptar"); setError("");
     try {
       const nueva = DEMO ? cambiarDemo(s.id, { estado: tarifa && monto === tarifa ? "confirmada" : "cotizada", valor: monto }) : await api.solicitudes.aceptar(s.id, monto);
-      await qc.invalidateQueries({ queryKey: ["solicitudes"] });
+      aplicarSolicitud(qc, s.estado, nueva);
       v.avisar(nueva.estado === "confirmada" ? "Solicitud aceptada con su domicilio de siempre. Asígnala a un mensajero." : "Solicitud aceptada. Envía el valor al cliente por WhatsApp.");
       // Si quedó confirmada, el aviso cambia a la tarjeta de asignación; si quedó cotizada, se cierra y espera al cliente.
       if (nueva.estado !== "confirmada") alCompletar?.();
     } catch (e) { setError(mensajeDe(e)); }
-    finally { setOcupado(false); }
+    finally { setOcupado(false); setHaciendo(""); }
   };
-  const confirmar = () => correr(async () => { if (DEMO) cambiarDemo(s.id, { estado: "confirmada" }); else await api.solicitudes.confirmar(s.id); }, "Listo: ya puedes asignarla a un mensajero.");
+  const confirmar = () => correr("confirmar", async () => (DEMO ? cambiarDemo(s.id, { estado: "confirmada" }) : api.solicitudes.confirmar(s.id)), "Listo: ya puedes asignarla a un mensajero.");
   const rechazar = () => { setRechazando(true); setError(""); };
   const confirmarRechazo = async () => {
     const m = motivo.trim();
     if (m.length < 3) { setError("Escribe la razón del rechazo: el cliente la va a ver."); return; }
-    await correr(async () => { if (DEMO) cambiarDemo(s.id, { estado: "rechazada", motivoRechazo: m }); else await api.solicitudes.rechazar(s.id, m); }, "Solicitud rechazada.");
+    await correr("rechazar", async () => (DEMO ? cambiarDemo(s.id, { estado: "rechazada", motivoRechazo: m }) : api.solicitudes.rechazar(s.id, m)), "Solicitud rechazada.");
   };
-  const asignar = () => correr(async () => {
-    if (DEMO) cambiarDemo(s.id, { estado: "asignada", mensajeroId: mensajero });
-    else { await api.solicitudes.asignar(s.id, mensajero); await qc.invalidateQueries({ queryKey: ["pedidos"] }); }
+  const asignar = () => correr("asignar", async () => {
+    if (DEMO) return cambiarDemo(s.id, { estado: "asignada", mensajeroId: mensajero });
+    const r = await api.solicitudes.asignar(s.id, mensajero);
+    void qc.invalidateQueries({ queryKey: ["pedidos"] }); // la guía nueva aparece en Pedidos; no hace falta esperarla aquí
+    return r.solicitud;
   }, "Asignada: el mensajero ya tiene la guía.");
 
   const [cls, etq] = ETQ[s.estado] ?? ["gris", s.estado];
@@ -213,7 +239,7 @@ export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Sol
           <small id={"motAyuda" + s.id} className="suave">El cliente la ve en su portal. No se le avisa por WhatsApp: escríbele tú si hace falta.</small>
         </div>
         <div className="acciones">
-          <button className="btn peligro" disabled={ocupado || motivo.trim().length < 3} onClick={confirmarRechazo}>Rechazar solicitud</button>
+          <button className="btn peligro" disabled={ocupado || motivo.trim().length < 3} onClick={confirmarRechazo}>{texto("rechazar", "Rechazar solicitud", "Rechazando…")}</button>
           <button className="btn sec" disabled={ocupado} onClick={() => { setRechazando(false); setMotivo(""); setError(""); }}>Cancelar</button>
         </div>
       </div>}
@@ -231,7 +257,7 @@ export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Sol
           </small>}
         </div></div>
         <div className="acciones sol-acciones">
-          <button className="btn ok sol-btn-aceptar" disabled={ocupado || monto <= 0} onClick={aceptar}><Check aria-hidden="true" />Aceptar</button>
+          <button className="btn ok sol-btn-aceptar" disabled={ocupado || monto <= 0} onClick={aceptar}><Check aria-hidden="true" />{texto("aceptar", "Aceptar", "Aceptando…")}</button>
           {pidioRechazo}
         </div>
       </>}
@@ -242,7 +268,7 @@ export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Sol
           {hayTel
             ? <a className="btn ok sol-btn-ancho" href={wa} target="_blank" rel="noopener noreferrer"><WhatsAppIcon />Enviar valor por WhatsApp</a>
             : <span className="aviso alerta sol-btn-ancho">El teléfono no sirve para WhatsApp: llámalo.</span>}
-          <button className="btn sol-btn-aceptar" disabled={ocupado} onClick={confirmar}><Check aria-hidden="true" />El cliente está de acuerdo</button>
+          <button className="btn sol-btn-aceptar" disabled={ocupado} onClick={confirmar}><Check aria-hidden="true" />{texto("confirmar", "El cliente está de acuerdo", "Guardando…")}</button>
           {pidioRechazo}
         </div>
       </>}
@@ -256,7 +282,7 @@ export function TarjetaSolicitud({ s, enDetalle = false, alCompletar }: { s: Sol
           </select>
         </div></div>
         <div className="acciones sol-acciones">
-          <button className="btn ok sol-btn-aceptar" disabled={ocupado || !mensajero} onClick={asignar}><Check aria-hidden="true" />Asignar y crear guía</button>
+          <button className="btn ok sol-btn-aceptar" disabled={ocupado || !mensajero} onClick={asignar}><Check aria-hidden="true" />{texto("asignar", "Asignar y crear guía", "Asignando…")}</button>
           {pidioRechazo}
         </div>
       </>}
@@ -342,24 +368,39 @@ export function AvisoSolicitud({ solicitudes }: { solicitudes?: Solicitud[] }) {
   return <ModalSolicitud key={actual.clave} aviso={actual} alCerrar={() => cerrarDe(actual.s.id)} />;
 }
 
-function ModalSolicitud({ aviso, alCerrar }: { aviso: AvisoOficina; alCerrar: () => void }) {
-  const { s } = aviso;
-  const esCliente = !!s.confirmadaPorCliente;
+/** La cuenta regresiva de 10 s con su propio estado: así solo se repinta esta barra (20 veces por segundo) y no la tarjeta con el formulario. */
+function TiempoAviso({ detenido, alTerminar }: { detenido: boolean; alTerminar: () => void }) {
   const [restante, setRestante] = useState(100);
-  const [detenido, setDetenido] = useState(false);
-  const alCerrarRef = useRef(alCerrar);
-  alCerrarRef.current = alCerrar;
-
+  const alTerminarRef = useRef(alTerminar);
+  alTerminarRef.current = alTerminar;
   useEffect(() => {
     if (detenido) return;
     const inicio = performance.now();
     const id = window.setInterval(() => {
       const pct = Math.max(0, 100 - ((performance.now() - inicio) / 10_000) * 100);
       setRestante(pct);
-      if (pct <= 0) { window.clearInterval(id); alCerrarRef.current(); }
+      if (pct <= 0) { window.clearInterval(id); alTerminarRef.current(); }
     }, 50);
     return () => window.clearInterval(id);
   }, [detenido]);
+  const segundos = Math.max(0, Math.ceil((restante / 100) * 10));
+  const transcurrido = Math.round(10 - (restante / 100) * 10);
+  return (
+    <div className={`aviso-solicitud-progreso${detenido ? " detenido" : ""}`}>
+      <div className="aviso-solicitud-barra" role="progressbar" aria-valuemin={0} aria-valuemax={10} aria-valuenow={transcurrido} aria-label="Tiempo antes de cerrar el aviso">
+        <i style={{ width: `${restante}%` }} />
+      </div>
+      <small>{detenido ? "Tiempo detenido. Revisa la solicitud y ciérrala cuando termines." : `Se cierra en ${segundos} s.`}</small>
+    </div>
+  );
+}
+
+function ModalSolicitud({ aviso, alCerrar }: { aviso: AvisoOficina; alCerrar: () => void }) {
+  const { s } = aviso;
+  const esCliente = !!s.confirmadaPorCliente;
+  const [detenido, setDetenido] = useState(false);
+  const alCerrarRef = useRef(alCerrar);
+  alCerrarRef.current = alCerrar;
 
   useEffect(() => {
     const anterior = document.body.style.overflow;
@@ -370,8 +411,6 @@ function ModalSolicitud({ aviso, alCerrar }: { aviso: AvisoOficina; alCerrar: ()
   }, []);
 
   const detener = () => setDetenido(true);
-  const segundos = Math.max(0, Math.ceil((restante / 100) * 10));
-  const transcurrido = Math.round(10 - (restante / 100) * 10);
   const valor = s.valor != null ? pesos(s.valor) : "el domicilio propuesto";
 
   const destino = document.querySelector(".jsl") ?? document.body;
@@ -401,12 +440,7 @@ function ModalSolicitud({ aviso, alCerrar }: { aviso: AvisoOficina; alCerrar: ()
           </p>
         </header>
         <div className="aviso-solicitud-cuerpo"><TarjetaSolicitud s={s} alCompletar={alCerrar} /></div>
-        <div className={`aviso-solicitud-progreso${detenido ? " detenido" : ""}`}>
-          <div className="aviso-solicitud-barra" role="progressbar" aria-valuemin={0} aria-valuemax={10} aria-valuenow={transcurrido} aria-label="Tiempo antes de cerrar el aviso">
-            <i style={{ width: `${restante}%` }} />
-          </div>
-          <small>{detenido ? "Tiempo detenido. Revisa la solicitud y ciérrala cuando termines." : `Se cierra en ${segundos} s.`}</small>
-        </div>
+        <TiempoAviso detenido={detenido} alTerminar={alCerrar} />
       </div>
     </div>,
     destino
