@@ -65,6 +65,17 @@ function paginaGananciasDemo(f: FiltrosCuentas, pagina: number, porPagina: numbe
   return { clientes: p.items, pagina: p.pagina, porPagina, total: p.total, paginas: p.paginas, totalGanancia };
 }
 const MEDIOS_K = Object.keys(MEDIOS) as Medio[];
+/** Huella corta de una lista de textos (FNV-1a): cambia si cambia cualquier campo, el orden no importa porque se ordena antes. */
+const huella = (xs: string[]) => { let h = 2166136261; for (const x of xs.sort()) for (let i = 0; i < x.length; i++) h = Math.imul(h ^ x.charCodeAt(i), 16777619); return xs.length + ":" + (h >>> 0).toString(36); };
+/* Las listas vienen del servidor. Antes su clave llevaba `version`, que sube con cualquier colección que llegue (la recarga
+   automática, el aviso de otra persona, y dos veces por cada guardado), así que se volvían a pedir aunque no hubiera
+   cambiado nada. Ahora la clave lleva una huella de lo que muestran: solo se vuelven a pedir si eso cambió. Si una lista
+   empieza a mostrar otro campo, agrégalo a su huella. */
+const firmaMovs = () => huella(Object.values(S.movimientos).filter(m => MOVS_OFICINA.includes(m.tipo))
+  .map(m => [m.id, m.tipo, m.valor, m.medio, m.medioAntes || "", m.nota, m.fecha, m.clienteId, m.porNombre].join("|"))
+  .concat(Object.values(S.clientes).map(c => "c|" + c.id + "|" + c.nombre)));
+const firmaInternos = () => huella(Object.values(S.cajamovs).filter(c => c.cat === "interna")
+  .map(c => [c.id, c.tipo, c.valor, c.medio, c.concepto, c.fecha, c.cuentaId].join("|")));
 const medioAntes = (x: { medio: string; medioAntes?: string }) => x.medioAntes && x.medioAntes !== x.medio ? <> <span className="sub" style={{ fontSize: ".8rem" }}>(antes {MEDIOS[x.medioAntes as Medio] || x.medioAntes})</span></> : null;
 
 /** Un pago ya contado en un arqueo no se borra: se registra hoy un pago contrario por el mismo valor. */
@@ -120,6 +131,8 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
 
   // El servidor filtra, cuenta y corta; en demo se imita con los datos en memoria.
   const porPagina = usePorPaginaCuentas();
+  const firmaM = useMemo(() => (E.tabCuentas === "cuentas" ? "" : firmaMovs()), [E.tabCuentas, version, pinta]);
+  const firmaI = useMemo(() => (E.tabCuentas === "cuentas" ? firmaInternos() : ""), [E.tabCuentas, version, pinta]);
   const [buscar, setBuscar] = useState(E.buscarCue);
   const [buscarGan, setBuscarGan] = useState(E.buscarGan);
   const tBuscar = useRef<number>(0), tBuscarGan = useRef<number>(0);
@@ -127,7 +140,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const alBuscar = (x: string) => { setBuscar(x); clearTimeout(tBuscar.current); tBuscar.current = window.setTimeout(() => poner({ buscarCue: x, paginaCue: 1 }), 300); };
   const alBuscarGan = (x: string) => { setBuscarGan(x); clearTimeout(tBuscarGan.current); tBuscarGan.current = window.setTimeout(() => poner({ buscarGan: x, paginaGan: 1 }), 300); };
   const qMovs = useQuery({
-    queryKey: ["movimientos", "cuentas", E.tipoCue, E.buscarCue, E.desdeCue, E.hastaCue, E.paginaCue, porPagina, version],
+    queryKey: ["movimientos", "cuentas", E.tipoCue, E.buscarCue, E.desdeCue, E.hastaCue, E.paginaCue, porPagina, firmaM],
     enabled: E.tabCuentas === "movimientos",
     placeholderData: keepPreviousData,
     queryFn: (): Promise<PaginaMovsUI> => DEMO
@@ -137,7 +150,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const pag = qMovs.data, filas = pag?.movimientos ?? [];
   const tot = pag?.totales ?? { recibido: 0, pagado: 0, compras: 0, ganancia: 0 };
   const qGan = useQuery({
-    queryKey: ["movimientos", "ganancias", E.buscarGan, E.desdeCue, E.hastaCue, E.paginaGan, porPagina, version],
+    queryKey: ["movimientos", "ganancias", E.buscarGan, E.desdeCue, E.hastaCue, E.paginaGan, porPagina, firmaM],
     enabled: E.tabCuentas === "ganancias",
     placeholderData: keepPreviousData,
     queryFn: () => DEMO
@@ -148,7 +161,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const porPaginaInt = usePorPaginaInternos();
   const arribaInt = useRef<HTMLDivElement>(null);
   const qInt = useQuery({
-    queryKey: ["cajamovs", "interna", E.diaInternos, E.medioInternos, E.paginaInternos, porPaginaInt, version],
+    queryKey: ["cajamovs", "interna", E.diaInternos, E.medioInternos, E.paginaInternos, porPaginaInt, firmaI],
     enabled: E.tabCuentas === "cuentas",
     placeholderData: keepPreviousData,
     queryFn: (): Promise<PaginaInternosUI> => DEMO

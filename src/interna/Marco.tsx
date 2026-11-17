@@ -2,7 +2,7 @@
 import { DashboardSkeleton } from "../components/skeletons/DashboardSkeleton";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSesion, useUsuario } from "../auth/Sesion";
-import { necesarias, ProveedorDatos, useColecciones, useDatos } from "./datos";
+import { necesarias, ProveedorDatos, subDe, useColecciones, useDatos } from "./datos";
 import { ProveedorMenuColapsado, ProveedorVentana, Icono, IconoSalir, useVentana } from "./ui";
 import { E, estadoInicialPedidos, guardarLocal } from "./estado";
 import { useTema } from "./tema";
@@ -104,7 +104,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
     elegir = k => { if (ADMIN_ESCRITORIO.some(([x]) => x === k)) { E.tabA = "mas"; E.subMas = k; } else E.tabA = k; };
   }
   // Apuntar o tocar un botón del menú ya empieza a bajar esa pestaña (solo en la oficina; el mensajero va en un solo archivo).
-  const intencion = (k: string) => { if (enOficina) { precargarPestana(k); precargar(necesarias(E.rol, k, k === "caja" ? E.tabCaja : undefined)); } };
+  const intencion = (k: string) => { if (enOficina) { precargarPestana(k); precargar(necesarias(E.rol, k, subDe(k))); } };
   const ir = (k: string) => {
     if (k === "pedidos" && enOficina) Object.assign(E, { filtroA: estadoInicialPedidos(), buscarA: "", mensPedA: "", diaPedA: "", paginaA: 1 });
     elegir(k); pintar(); scrollTo(0, 0);
@@ -114,7 +114,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
   );
   // Solo se piden al servidor las colecciones que usa la vista abierta (las demás, al abrirla).
   const cargaVista = enOficina && E.tabA === "inicio" ? <DashboardSkeleton /> : cargando;
-  const listo = useColecciones(necesarias(E.rol, enMensajero ? E.tabM : E.tabA, !enMensajero && E.tabA === "caja" ? E.tabCaja : undefined));
+  const listo = useColecciones(necesarias(E.rol, enMensajero ? E.tabM : E.tabA, enMensajero ? undefined : subDe(E.tabA)));
   // La pestaña y sub-pestaña quedan en la URL y en sessionStorage para la próxima recarga.
   usePersistedTab(CLAVE_NAV_ADMIN, usuario?.id || "", navegacionActual());
   const cabe = items.length <= 5, vis = cabe ? items : items.slice(0, 4), resto = cabe ? [] : items.slice(4);

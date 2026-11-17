@@ -67,10 +67,21 @@ const DE_CAJA: Record<string, Coleccion[]> = {
   arqueos: ["mensajeros", "cajamovs", "corte"],
   patinadores: ["mensajeros", "recaudos", "cajamovs", "corte", "liquidaciones"]
 };
+/** Cuentas: la sub-pestaña Cuentas calcula las cifras de la caja con todo. Movimientos necesita casi todo para el formulario
+    (saldo del cliente: guías y movimientos; caja del asistente: caja, recaudos, movimientos, guías, mensajeros y cuentas;
+    lo ya contado: corte y caja), pero no liquidaciones, jornadas ni usuarios. Ganancias viene del servidor: solo usa los
+    nombres de los clientes y los movimientos (para saber cuándo volver a pedir la lista). */
+const DE_CUENTAS: Record<string, Coleccion[]> = {
+  movimientos: ["pedidos", "clientes", "mensajeros", "movimientos", "recaudos", "cajamovs", "cuentas", "corte"],
+  ganancias: ["clientes", "movimientos"]
+};
+/** La sub-pestaña abierta de las pestañas que cargan por sub-pestaña (para `necesarias`). */
+export const subDe = (tab: string) => (tab === "caja" ? E.tabCaja : tab === "cuentas" ? E.tabCuentas : undefined);
 export function necesarias(modo: string, tab: string, sub?: string): Coleccion[] {
   if (modo === "patinador") return ["mensajeros"]; // solo para elegir el patinador: su caja la trae su propia consulta
   if (modo === "mensajero") return TODAS;
   if (tab === "caja" && sub && DE_CAJA[sub]) return DE_CAJA[sub];
+  if (tab === "cuentas" && sub && DE_CUENTAS[sub]) return DE_CUENTAS[sub];
   return DE_PESTANA[tab] ?? TODAS;
 }
 
