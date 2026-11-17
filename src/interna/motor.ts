@@ -72,11 +72,19 @@ export const yo = { uid: "", nombre: "", esAdmin: false, esAsistente: false, cor
 /* ---------- utilidades ---------- */
 const ZONA = "America/Bogota";
 export const pesos = (n: number | null | undefined) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
-export const diaDe = (ts: number) => new Date(ts).toLocaleDateString("en-CA", { timeZone: ZONA });
+/* Los formateadores se crean una sola vez: `toLocaleDateString(…, { timeZone })` arma uno nuevo en cada llamada y es
+   unas 15 a 30 veces más lento. Pesa mucho porque `diaDe` corre por cada guía en sueldos, caja y períodos
+   (con 30 000 guías, `resumenCaja` pasaba de ~14,8 s a ~0,5 s). Dan exactamente el mismo texto: lo comprueba
+   `scripts/prueba-fechas.mjs`. */
+const fmtDia = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA });
+const fmtHora = new Intl.DateTimeFormat("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: ZONA });
+const fmtHoraCorta = new Intl.DateTimeFormat("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: ZONA });
+/** Con una fecha inválida, `format` lanza un error y `toLocale…` devolvía "Invalid Date": se conserva lo de antes. */
+const formatear = (f: Intl.DateTimeFormat, d: Date) => (Number.isNaN(d.getTime()) ? "Invalid Date" : f.format(d));
+export const diaDe = (ts: number) => formatear(fmtDia, new Date(ts));
 export const hoy = () => diaDe(Date.now());
-export const hora = (ts: number | null | undefined) =>
-  new Date(Number(ts) || 0).toLocaleString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: ZONA });
-export const horaCorta = (ts: number) => new Date(ts).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: ZONA });
+export const hora = (ts: number | null | undefined) => formatear(fmtHora, new Date(Number(ts) || 0));
+export const horaCorta = (ts: number) => formatear(fmtHoraCorta, new Date(ts));
 /** Mediodía de un día AAAA-MM-DD en hora de Colombia: para mover días sin que el huso cambie la fecha. */
 const mediodia = (d: string) => new Date(d + "T12:00:00-05:00");
 export const horaActual = () => Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: ZONA })) % 24;
