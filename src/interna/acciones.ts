@@ -5,7 +5,7 @@
 import * as api from "../api/servicios";
 import type * as T from "../api/tipos";
 import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente, idSinDesc } from "./motor";
-import { aPedido, aPersona } from "./datos";
+import { aPedido, aPersona, aRec, type Coleccion } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
 import { canjearDemo, aNombreDe } from "./traspaso";
@@ -14,7 +14,8 @@ type Tocar = (fn?: (s: Almacen) => void) => void;
 let tocar: Tocar = () => {};
 let recargar: () => Promise<void> = async () => {};
 /** datos.tsx conecta aquí cómo volver a pintar y cómo recargar. */
-export const conectar = (t: Tocar, r: () => Promise<void>) => { tocar = t; recargar = r; };
+let recargarSolo: (cols: readonly Coleccion[]) => Promise<void> = async () => {};
+export const conectar = (t: Tocar, r: () => Promise<void>, rs: (cols: readonly Coleccion[]) => Promise<void>) => { tocar = t; recargar = r; recargarSolo = rs; };
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -221,7 +222,12 @@ export async function cambiarMedio(col: "movimientos" | "recaudos", k: string, m
 export async function recibirDinero(d: { mensajeroId: string; valor: number; medio: Medio; nota: string; fecha?: number }, editar?: string) {
   if (DEMO) { const k = editar || id(); tocar(s => { s.recaudos[k] = { ...(s.recaudos[k] || { porUid: yo.uid, porNombre: yo.nombre, fecha: Date.now() }), id: k, ...d, ...(d.fecha ? { fecha: d.fecha } : {}) }; }); return; }
   const cuerpo = { ...d, fecha: d.fecha ? iso(d.fecha) : undefined };
-  await tras(editar ? api.recaudos.actualizar(editar, cuerpo) : api.recaudos.crear(cuerpo));
+  if (editar) { await tras(api.recaudos.actualizar(editar, cuerpo)); return; }
+  // Entrega nueva: se pinta en cuanto responde el servidor (ya no se espera a volver a bajar todos los datos) y,
+  // en segundo plano, solo se refrescan los recaudos para confirmar con lo que quedó guardado.
+  const r = await api.recaudos.crear(cuerpo);
+  tocar(s => { s.recaudos[r.id] = aRec(r); });
+  void recargarSolo(["recaudos"]).catch(() => {});
 }
 /** Recepción → Recibir dinero: el mensajero anota lo que le pagó un cliente en la calle. Es un pago del cliente (abona a su
     cuenta) que no entra a la caja hasta que él lo entrega; mientras tanto suma a lo que debe. Devuelve el aviso. */

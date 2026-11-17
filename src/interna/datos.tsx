@@ -30,7 +30,7 @@ export const aPedido = (p: T.Pedido): Pedido => ({
 const aCliente = (c: T.Cliente): Cliente => ({ id: c.id, nombre: c.nombre, telefono: c.telefono || "", tarifa: c.tarifa || 0 });
 export const aPersona = (m: T.Mensajero): Persona => ({ id: m.id, nombre: m.nombre, telefono: m.telefono || "", tipo: m.tipo || "mensajero", tarifa: m.tarifa || 0 });
 export const aMov = (m: T.Movimiento): Movimiento => ({ id: m.id, clienteId: m.clienteId, tipo: m.tipo, valor: m.valor || 0, medio: m.medio || "", nota: m.nota || "", fecha: ms(m.fecha), porUid: m.porUid || "", porNombre: m.porNombre || "", medioAntes: m.medioAntes || undefined, mensajeroId: m.mensajeroId || undefined });
-const aRec = (r: T.Recaudo): Recaudo => ({ id: r.id, mensajeroId: r.mensajeroId, valor: r.valor || 0, medio: r.medio || "efectivo", nota: r.nota || "", fecha: ms(r.fecha), porUid: r.porUid || "", porNombre: r.porNombre || "", medioAntes: r.medioAntes || undefined });
+export const aRec = (r: T.Recaudo): Recaudo => ({ id: r.id, mensajeroId: r.mensajeroId, valor: r.valor || 0, medio: r.medio || "efectivo", nota: r.nota || "", fecha: ms(r.fecha), porUid: r.porUid || "", porNombre: r.porNombre || "", medioAntes: r.medioAntes || undefined });
 export const aLiq = (l: T.Liquidacion): Liquidacion => ({ ...l, fecha: ms(l.fecha), desde: ms(l.desde), guias: l.guias ?? undefined });
 export const aCaja = (c: T.CajaMovimiento): CajaMov => ({
   id: c.id, tipo: c.tipo, cat: c.cat, valor: c.valor || 0, medio: (c.medio || "") as CajaMov["medio"], concepto: c.concepto || "", fecha: ms(c.fecha),
@@ -184,6 +184,13 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
     return traer(usadas, true);
   }, [cache, traer]);
 
+  // Después de un cambio pequeño (por ejemplo, recibir dinero) solo se vuelven a pedir esas colecciones, no todo.
+  const recargarSolo = useCallback((cols: readonly Coleccion[]) => {
+    const usadas = enPantalla();
+    cols.forEach(c => cache.invalidar(c));
+    return traer(cols.filter(c => usadas.includes(c)), true);
+  }, [cache, traer]);
+
   const usar = useCallback((cols: readonly Coleccion[]) => {
     cols.forEach(c => enUso.current.set(c, (enUso.current.get(c) || 0) + 1));
     void traer(cols);
@@ -203,7 +210,7 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   // Con `fn` cambió el almacén (lo que respondió el servidor, o la demo): sube `version` y las listas se vuelven a pedir.
   // Sin `fn` es solo volver a pintar (cambió la pestaña o un filtro de `E`): antes eso también volvía a pedir la página.
   const tocar = useCallback((fn?: (s: Almacen) => void) => { if (fn) { fn(S); setVersion(v => v + 1); } else setPinta(v => v + 1); }, []);
-  conectar(tocar, recargar);
+  conectar(tocar, recargar, recargarSolo);
   return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, precargar, tiene }}>{children}</Ctx.Provider>;
 }
 

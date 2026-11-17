@@ -549,7 +549,7 @@ export function RecibirDinero({ mid, pat }: { mid: string; pat?: ResumenPatinado
     <div className="linea2"><div className="campo"><label htmlFor="rVal">Valor que entrega</label><input id="rVal" type="number" inputMode="numeric" min="0" step="1000" autoFocus value={val} onFocus={e => e.target.select()} onChange={e => setVal(e.target.value)} /></div>
       <div className="campo"><label htmlFor="rMedio">Medio</label><select id="rMedio" value={medio} onChange={e => setMedio(e.target.value as Medio)}>{MEDIOS_K.map(k => <option key={k} value={k}>{MEDIOS[k]}</option>)}</select></div></div>
     <div className="campo"><label htmlFor="rNota">Nota (opcional)</label><input id="rNota" placeholder="Ej: primera entrega de la tarde" value={nota} onChange={e => setNota(e.target.value)} /></div>
-    <button className="btn ok recibir-guardar" id="rGuardar" disabled={guardando} onClick={guardar}>Registrar entrega de dinero</button>
+    <button className="btn ok recibir-guardar" id="rGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Registrar entrega de dinero"}</button>
   </div>;
 }
 
