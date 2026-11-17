@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
-  S, yo, hoy, hora, pesos, diaDe, listaOrdenada, textoCuenta, yaContado, mueveCaja, esPago, nombreCliente, saldoCliente, sinTildes, cajaOficina, puedoCambiarMedio,
+  S, yo, hoy, hora, pesos, diaDe, listaOrdenada, saldoCuenta, yaContado, mueveCaja, esPago, nombreCliente, saldoCliente, sinTildes, cajaOficina, puedoCambiarMedio,
   fechaCaja, fechaDia, diaMinCaja, MEDIOS, MOVS, MOVS_OFICINA, TIPOS_CUENTA, resumenCaja, MEDIOS_CAJA, type Medio, type Movimiento, type TipoMov, type CajaMov,
 } from "../motor";
 import { Cab, FiltroDia, Icono, Paginador, useVentana } from "../ui";
@@ -11,9 +11,9 @@ import { E, guardarLocal } from "../estado";
 import { borrarDe, crearCuenta, guardarMovimiento, movCaja } from "../acciones";
 import { aCaja, aMov, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
-import { caja as apiCaja, movimientos as apiMovimientos } from "../../api/servicios";
+import { caja as apiCaja, cuentasInternas as apiCuentas, movimientos as apiMovimientos } from "../../api/servicios";
 import { usePorPaginaCuentas, usePorPaginaInternos } from "../../lib/pantalla";
-import type { GananciaCliente, PaginaCajaMovimientos, PaginaGanancias, PaginaMovimientos } from "../../api/tipos";
+import type { GananciaCliente, PaginaCajaMovimientos, PaginaGanancias, PaginaMovimientos, ResumenCuentas } from "../../api/tipos";
 import { avisoContado, diaAntesDelArqueo } from "./comun";
 import { CambiarMedio, FormCliente } from "./modales";
 
@@ -64,6 +64,16 @@ function paginaGananciasDemo(f: FiltrosCuentas, pagina: number, porPagina: numbe
   const p = cortar(lista, pagina, porPagina);
   return { clientes: p.items, pagina: p.pagina, porPagina, total: p.total, paginas: p.paginas, totalGanancia };
 }
+/** Las cifras y saldos de Cuentas → Cuentas con los datos en memoria (solo modo demo; con servidor vienen de GET /cuentas/resumen). */
+function resumenDemo(): ResumenCuentas {
+  const { total, porMedio, disponible } = resumenCaja();
+  return { total, porMedio, disponible, cuentas: Object.values(S.cuentas).map(cu => {
+    const s = saldoCuenta(cu.id);
+    return { ...cu, saldo: s, estado: cu.tipo === "base" ? { txt: "Base actual", valor: -s } : s > 0 ? { txt: "Te debe", valor: s } : s < 0 ? { txt: "Tiene a favor", valor: -s } : { txt: "En cero", valor: 0 } };
+  }) };
+}
+/** Texto y color de la tarjeta a partir del estado que da el servidor (mismos textos que `textoCuenta`). */
+const textoEstado = (e: { txt: string; valor: number }) => ({ txt: e.txt, val: pesos(e.valor), cls: e.txt === "Te debe" ? "neg" : e.txt === "Tiene a favor" ? "pos" : "" });
 const MEDIOS_K = Object.keys(MEDIOS) as Medio[];
 /** Huella corta de una lista de textos (FNV-1a): cambia si cambia cualquier campo, el orden no importa porque se ordena antes. */
 const huella = (xs: string[]) => { let h = 2166136261; for (const x of xs.sort()) for (let i = 0; i < x.length; i++) h = Math.imul(h ^ x.charCodeAt(i), 16777619); return xs.length + ":" + (h >>> 0).toString(36); };
@@ -83,13 +93,11 @@ const reversarPago = (m: Movimiento) => yaContado(m.fecha) ? guardarMovimiento(n
 
 export default function Cuentas({ pintar }: { pintar: () => void }) {
   const v = useVentana();
-  const { version, pinta } = useDatos();
+  const { version, pinta, tiene } = useDatos();
   const enCuentas = E.tabCuentas === "cuentas";
   // El resumen de la caja recorre todo (guías, sueldos, períodos): solo se calcula en la sub-pestaña Cuentas, que es la
   // que lo muestra, y solo cuando cambian los datos. Cambiar de página o de filtro de la tabla ya no lo recalcula.
   // `S` se cambia en sitio: lo que avisa del cambio es `version`/`pinta`.
-  const R = useMemo(() => (enCuentas ? resumenCaja() : null), [enCuentas, version, pinta]);
-  const cs = useMemo(() => listaOrdenada(S.cuentas, "nombre").map(cu => ({ cu, t: textoCuenta(cu) })), [version, pinta]);
   const [creando, setCreando] = useState(false);
   // Id del movimiento que se está quitando o reversando: su botón queda desactivado hasta que responda el servidor,
   // para que un segundo toque con la red lenta no reverse dos veces el mismo pago.
@@ -133,6 +141,21 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
   const porPagina = usePorPaginaCuentas();
   const firmaM = useMemo(() => (E.tabCuentas === "cuentas" ? "" : firmaMovs()), [E.tabCuentas, version, pinta]);
   const firmaI = useMemo(() => (E.tabCuentas === "cuentas" ? firmaInternos() : ""), [E.tabCuentas, version, pinta]);
+  // Las 5 cifras y el saldo de las tarjetas los calcula el servidor (GET /cuentas/resumen): así esta sub-pestaña no baja
+  // todas las guías. Se vuelven a pedir si cambian los movimientos internos o las cuentas (lo que se hace aquí) o si llega
+  // un aviso en tiempo real de cualquier cambio (eventos.ts). En demo se calculan con los datos en memoria.
+  const nCuentas = Object.keys(S.cuentas).length;
+  const qRes = useQuery({
+    queryKey: ["cuentas", "resumen", firmaI, nCuentas],
+    enabled: enCuentas && tiene(["cuentas", "cajamovs"]),
+    placeholderData: keepPreviousData,
+    queryFn: (): Promise<ResumenCuentas> => DEMO ? Promise.resolve(resumenDemo()) : apiCuentas.resumen()
+  });
+  const R = qRes.data ?? null;
+  const cs = useMemo(() => {
+    const porId = new Map((R?.cuentas ?? []).map(c => [c.id, c.estado]));
+    return listaOrdenada(S.cuentas, "nombre").map(cu => ({ cu, t: textoEstado(porId.get(cu.id) ?? { txt: "En cero", valor: 0 }) }));
+  }, [R, version, pinta]);
   const [buscar, setBuscar] = useState(E.buscarCue);
   const [buscarGan, setBuscarGan] = useState(E.buscarGan);
   const tBuscar = useRef<number>(0), tBuscarGan = useRef<number>(0);
@@ -184,14 +207,16 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
     </div>
 
     <div role="tabpanel" id="panelCue-cuentas" aria-labelledby="tabCue-cuentas" hidden={E.tabCuentas !== "cuentas"}>
-      {E.tabCuentas === "cuentas" && R && <>
+      {E.tabCuentas === "cuentas" && <>
+      {qRes.isError ? <div className="aviso alerta">No se pudieron traer las cifras de la caja: {motivoError(qRes.error)} <button className="btn chico" onClick={() => qRes.refetch()}>Intentar otra vez</button></div>
+        : !R ? <div className="vacio">Cargando cifras…</div> : <>
       <div className="cifras cifras-cuentas">
         <div className="cifra fuerte"><span>Total en caja</span><b>{pesos(R.total)}</b><span>{Object.entries(R.porMedio).filter(([, x]) => Math.round(x)).map(([m, x]) => `${MEDIOS_CAJA[m] || m}: ${pesos(x)}`).join(" · ") || "Sin movimientos"}</span></div>
         {(["efectivo", "nequi", "bancolombia"] as const).map(k => <div className="cifra" key={k}><span>{MEDIOS_CAJA[k] || k}</span><b>{pesos(R.porMedio[k] || 0)}</b></div>)}
         <div className="cifra"><span>Disponible de JS</span><b className={R.disponible < 0 ? "neg" : ""}>{pesos(R.disponible)}</b><span>Caja − clientes − sueldos</span></div>
-      </div>
+      </div></>}
       <div className="mgrid mgrid-cuentas">
-        {cs.map(({ cu, t }) => { return <div className="mcard mcard-cuenta" key={cu.id}><div className="mcard-top"><b>{cu.nombre}</b><span className="acciones"><button className="btn ok chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="entra" />, "centrada")}>Entrada</button><button className="btn sec chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="sale" />, "centrada")}>Salida</button></span></div>
+        {cs.map(({ cu, t }) => { return <div className="mcard mcard-cuenta" key={cu.id}><div className="mcard-top"><b>{cu.nombre}</b><span className="acciones"><button className="btn ok chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="entra" t={t} />, "centrada")}>Entrada</button><button className="btn sec chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="sale" t={t} />, "centrada")}>Salida</button></span></div>
           <span className="sub mcard-cuenta-sub">{TIPOS_CUENTA[cu.tipo] || ""}</span><dl className="datos"><dt>{t.txt}</dt><dd className={t.cls}>{t.val}</dd></dl></div>; })}
       </div>
       {!cs.length ? <div className="vacio">{yo.esAdmin ? <>Todavía no hay cuentas. <button className="btn chico" id="cuSemilla" disabled={creando} onClick={semilla}>Crear JS Envíos, MT y Base de JS</button></> : "El administrador todavía no ha creado las cuentas."}</div> : null}
@@ -296,11 +321,10 @@ function NuevaCuenta() {
   </div>;
 }
 
-function MovCuenta({ id, tipo }: { id: string; tipo: "entra" | "sale" }) {
+function MovCuenta({ id, tipo, t }: { id: string; tipo: "entra" | "sale"; t: { txt: string; val: string } }) {
   const v = useVentana(), cu = S.cuentas[id];
   const [val, setVal] = useState(""), [medio, setMedio] = useState<Medio>("efectivo"), [dia, setDia] = useState(hoy()), [mot, setMot] = useState(""), [guardando, setGuardando] = useState(false);
   if (!cu) return null;
-  const t = textoCuenta(cu);
   const guardar = async () => {
     const valor = Number(val), m = mot.trim();
     if (!(valor > 0)) return v.avisar("Escribe un valor mayor a cero"); if (!m) return v.avisar("Escribe el motivo");

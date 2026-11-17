@@ -21,6 +21,9 @@ export function useEventos(avisos?: AvisosEventos) {
         if (d?.cols?.length) aviso.current?.alCambiar?.(d.cols);
         if (d?.cols?.includes("solicitudes")) qc.invalidateQueries({ queryKey: ["solicitudes"] }, { cancelRefetch: false }); // si ya hay un refresco en curso (por la acción de esta pantalla), no se repite
         if (d?.cols?.includes("recaudos") || d?.cols?.includes("caja_patinador")) qc.invalidateQueries({ queryKey: ["patinador"] }); // el resumen de patinadores (Caja) se arma con sus pagos y con lo que ya entregaron
+        // Las cifras de Cuentas → Cuentas vienen del servidor y cruzan casi todo (guías, pagos, caja, sueldos): cualquier cambio
+        // las deja viejas. Solo se vuelven a pedir si están en pantalla.
+        if (d?.cols?.length) qc.invalidateQueries({ queryKey: ["cuentas", "resumen"] }, { cancelRefetch: false });
         if (d?.cols?.includes("pedidos")) { qc.invalidateQueries({ queryKey: ["pedidos"] }); qc.invalidateQueries({ queryKey: ["patinador"] }); qc.invalidateQueries({ queryKey: ["recogidas"] }); }
       } catch { /* un evento incompleto no debe romper la pantalla */ }
     };

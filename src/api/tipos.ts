@@ -222,6 +222,12 @@ export interface CajaMovimiento {
 
 /** Cuentas internas: JS Envíos, MT, Base de JS. */
 export interface CuentaInterna { id: string; nombre: string; tipo: "socio" | "base" }
+/** GET /cuentas/resumen: las cifras de Cuentas → Cuentas y el saldo de cada cuenta interna, calculados en el servidor.
+    `saldo` > 0 = la cuenta le debe a JS; en la Base de JS, `estado.valor` es la base actual (ya resta sus gastos). */
+export interface ResumenCuentas {
+  total: number; porMedio: Record<string, number>; disponible: number;
+  cuentas: (CuentaInterna & { saldo: number; estado: { txt: string; valor: number } })[];
+}
 
 /** Registro de cambios (historial) y papelera. */
 export interface Cambio { id: string; fecha: string; quien: string; op: string; col: string; docId: string; resumen: string }

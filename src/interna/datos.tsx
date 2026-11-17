@@ -67,11 +67,14 @@ const DE_CAJA: Record<string, Coleccion[]> = {
   arqueos: ["mensajeros", "cajamovs", "corte"],
   patinadores: ["mensajeros", "recaudos", "cajamovs", "corte", "liquidaciones"]
 };
-/** Cuentas: la sub-pestaña Cuentas calcula las cifras de la caja con todo. Movimientos necesita casi todo para el formulario
+/** Cuentas: la sub-pestaña Cuentas toma sus cifras del servidor. Movimientos necesita casi todo para el formulario
     (saldo del cliente: guías y movimientos; caja del asistente: caja, recaudos, movimientos, guías, mensajeros y cuentas;
     lo ya contado: corte y caja), pero no liquidaciones, jornadas ni usuarios. Ganancias viene del servidor: solo usa los
     nombres de los clientes y los movimientos (para saber cuándo volver a pedir la lista). */
 const DE_CUENTAS: Record<string, Coleccion[]> = {
+  // Las cifras y el saldo de las tarjetas vienen del servidor (GET /cuentas/resumen): aquí solo se usan los nombres de las
+  // cuentas, los movimientos internos (lo ya contado al quitar) y el corte (día mínimo al registrar).
+  cuentas: ["cuentas", "cajamovs", "corte"],
   movimientos: ["pedidos", "clientes", "mensajeros", "movimientos", "recaudos", "cajamovs", "cuentas", "corte"],
   ganancias: ["clientes", "movimientos"]
 };

@@ -1,7 +1,7 @@
 /* Llamadas al backend, agrupadas por recurso. */
 import { api } from "./cliente";
 import type { FiltroMetodoEntregas, PaginaEntregasPeriodo, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, Archivo, TipoArchivo, Cliente, ClienteBreve, Mensajero, Movimiento, Pedido, Usuario, Motivo, MetodoEntrega, Rol, TipoPersonal, Medio, EstadoPedido,
-  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, DetalleLiquidacion, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
+  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, ResumenCuentas, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, DetalleLiquidacion, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
 import { FalloApi } from "./cliente";
 
 const datos = <T>(p: Promise<{ data: T }>) => p.then(r => r.data);
@@ -248,7 +248,11 @@ export const liquidaciones = {
     opcional(datos<PaginaLiquidaciones>(api.get("/liquidaciones/pagina", { params: { ...f, pagina, porPagina } })), { liquidaciones: [], pagina: 1, porPagina, total: 0, paginas: 1 })
 };
 export const cajaMovimientos = coleccion<CajaMovimiento, Partial<CajaMovimiento>>("/caja/movimientos", "movimientos", "movimiento");
-export const cuentasInternas = coleccion<CuentaInterna, Omit<CuentaInterna, "id">>("/cuentas", "cuentas", "cuenta");
+export const cuentasInternas = {
+  ...coleccion<CuentaInterna, Omit<CuentaInterna, "id">>("/cuentas", "cuentas", "cuenta"),
+  /** Cifras de la caja y saldo de cada cuenta, calculados en el servidor (Cuentas → Cuentas). */
+  resumen: () => datos<{ resumen: ResumenCuentas }>(api.get("/cuentas/resumen")).then(r => r.resumen)
+};
 export const jornadas = {
   ...coleccion<Jornada>("/jornadas", "jornadas", "jornada"),
   /** Crea o cambia el pago de un día (o el sueldo previo de una semana). */
