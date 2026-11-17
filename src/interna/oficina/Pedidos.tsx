@@ -7,7 +7,7 @@ import {
 } from "../motor";
 import { Cab, EtqEstado, FiltroDia, FilaPedido, FotosGuia, IconoCamara, IconoFiltro, IconoInfo, Paginador, pl, useVentana } from "../ui";
 import { E } from "../estado";
-import { actualizarPedido, cambioEntregado, crearGuias, eliminarPedido, reabrir } from "../acciones";
+import { actualizarPedido, cambioEntregado, crearGuias, enBloque, eliminarPedido, reabrir } from "../acciones";
 import { aPedido, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
 import { usePorPagina } from "../../lib/pantalla";
@@ -194,12 +194,14 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
   const [valCob, setValCob] = useState(String(Number(p0?.valorCobrado) || 0)), [met, setMet] = useState<Metodo>((p0?.metodo as Metodo) || "efectivo"), [cta, setCta] = useState(p0?.cuentaJs || "");
   const [gasto, setGasto] = useState(String(gastoDe(p0 || ({} as Pedido)) || "")), [gastoNota, setGastoNota] = useState(p0?.gastoNota || "");
   const [domi, setDomi] = useState(!!p0?.domiPagado), [domiMedio, setDomiMedio] = useState<string>(p0?.domiPagoMedio || ""), [domiVal, setDomiVal] = useState(p0?.domiPagado ? String(pagoDomi(p0)) : "");
+  const [guardando, setGuardando] = useState(false);
   const p = S.pedidos[guia]; if (!p) return null;
   const vis = cs.filter(x => !q || sinTildes(x.nombre + " " + (x.telefono || "")).includes(sinTildes(q.trim())));
   const elegirCli = (id: string) => { setCli(id); const t = S.clientes[id]?.tarifa; if (t && !serv) setServ(String(t)); };
   const conCambio = async (fn: () => Promise<void>, ok: string, cerrar = true) => { try { await fn(); v.avisar(ok); if (cerrar) v.cerrar(); else v.abrir(<AbrirPedido guia={guia} />, "drawer"); } catch (e) { v.avisar("No se pudo guardar: " + motivoError(e)); } };
 
   const guardar = async () => {
+    if (guardando) return;
     if (!cli) return v.avisar("Elige el remitente");
     const datos: CambiosPedido & { domiPagoMedio?: Medio | "" } = { clienteId: cli, valorServicio: Number(serv) || 0, domiPagado: domi, aCobrar: Number(cob) || 0, gasto: Math.max(0, Number(gasto) || 0), gastoNota: gastoNota.trim() };
     if (domi) {
@@ -217,7 +219,9 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     }
     const despues = { ...p, ...datos, domiPagoMedio: (datos.domiPagoMedio ?? p.domiPagoMedio) as Medio | "", domiPagoValor: datos.domiPagoValor ?? null } as Pedido;
     if (cambiaLoContado(p, despues)) return avisoContado(v);
+    setGuardando(true);
     await conCambio(() => actualizarPedido(guia, datos), "Guía " + guia + " actualizada");
+    setGuardando(false);
   };
   const borrar = async () => {
     if (cambiaLoContado(p, null)) return avisoContado(v);
@@ -262,7 +266,7 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     <div className={"linea2 " + (domi ? "" : "oculto")} id="pDomiBox"><div className="campo"><label htmlFor="pDomiMedio">¿Cómo pagó? (entra a la caja)</label>
       <select id="pDomiMedio" value={domiMedio} onChange={e => setDomiMedio(e.target.value)}><option value="">{p.domiPagado && !p.domiPagoMedio ? "No registrado en caja" : "Elige…"}</option>{Object.entries(MEDIOS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
       <div className="campo"><label htmlFor="pDomiVal">Valor que pagó</label><input id="pDomiVal" type="number" inputMode="numeric" min="0" step="100" value={domiVal} onChange={e => setDomiVal(e.target.value)} /></div></div>
-    <button className="btn" id="pGuardar" onClick={guardar}>Guardar cambios</button>
+    <button className="btn" id="pGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar cambios"}</button>
     </section>
     <div className="pedido-detalle-operacion">
     <section className="pedido-detalle-panel" aria-label="Trazabilidad del pedido">
@@ -315,16 +319,16 @@ export function EnBloque({ modo, lista }: { modo: string; lista: Pedido[] }) {
   const marcar = (g: string, si: boolean) => setSel(s => { const n = new Set(s); if (si) n.add(g); else n.delete(g); return n; });
   const guardar = async () => {
     const valor = Number(serv) || 0, guias = ps.map(p => p.guia).filter(g => sel.has(g));
-    let cambios: [string, CambiosPedido][];
-    if (sin) { if (!cli) return v.avisar("Elige el remitente"); cambios = guias.map(g => [g, { clienteId: cli, ...(valor ? { valorServicio: valor } : {}) }]); }
-    else {
-      const l = guias.map(g => { const t = suyo ? Number(S.clientes[S.pedidos[g].clienteId]?.tarifa) || valor : valor; return [g, t ? { valorServicio: t } : null] as [string, CambiosPedido | null]; });
-      const faltan = l.filter(([, d]) => !d).length; if (faltan) return v.avisar(`${faltan} ${pl(faltan, "guía")} sin valor: escribe el valor del domicilio`);
-      cambios = l as [string, CambiosPedido][];
+    if (sin && !cli) return v.avisar("Elige el remitente");
+    if (!sin) {
+      const faltan = guias.filter(g => !(suyo ? Number(S.clientes[S.pedidos[g].clienteId]?.tarifa) || valor : valor)).length;
+      if (faltan) return v.avisar(`${faltan} ${pl(faltan, "guía")} sin valor: escribe el valor del domicilio`);
     }
-    setGuardando(true); let n = 0;
-    try { for (const [g, d] of cambios) { await actualizarPedido(g, d); n++; } v.cerrar(); v.avisar(`${n} ${pl(n, "guía")} ${n === 1 ? "actualizada" : "actualizadas"}`); }
-    catch { setGuardando(false); v.avisar(`Se guardaron ${n}; las demás no. Intenta otra vez.`); }
+    setGuardando(true);
+    try {
+      const n = await enBloque(sin ? { modo: "sin", guias, clienteId: cli, ...(valor ? { valorServicio: valor } : {}) } : { modo: "serv", guias, valorServicio: valor || undefined, usarTarifaCliente: suyo });
+      v.cerrar(); v.avisar(`${n} ${pl(n, "guía")} ${n === 1 ? "actualizada" : "actualizadas"}`);
+    } catch (e) { setGuardando(false); v.avisar("No se pudo guardar: " + motivoError(e) + ". No se cambió ninguna guía."); }
   };
   return <>
     <Cab sub={<span className="sub">{ps.length} {pl(ps.length, "guía")}</span>}><h2>{sin ? "Asignar remitente a varios" : "Poner domicilio a varios"}</h2></Cab>

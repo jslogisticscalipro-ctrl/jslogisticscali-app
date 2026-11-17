@@ -80,6 +80,9 @@ export const pedidos = {
   crear: (d: { mensajeroId?: string; clienteId?: string | null; valorServicio?: number; aCobrar?: number } = {}) =>
     datos<{ pedido: Pedido }>(api.post("/pedidos", d)).then(r => r.pedido),
   actualizar: (guia: string, d: CambiosPedido) => datos<{ pedido: Pedido }>(api.patch(`/pedidos/${guia}`, d)).then(r => r.pedido),
+  /** Remitente (`modo: "sin"`) o domicilio (`modo: "serv"`) a varias guías en una sola petición. */
+  enBloque: (d: { modo: "sin" | "serv"; guias: string[]; clienteId?: string; valorServicio?: number; usarTarifaCliente?: boolean }) =>
+    datos<{ actualizadas: number }>(api.post("/pedidos/en-bloque", d)).then(r => r.actualizadas),
   /** Recoger una guía "aceptado" (de una solicitud): con la foto de salida ya subida, pasa a en ruta. */
   recoger: (guia: string) => datos<{ pedido: Pedido }>(api.post(`/pedidos/${guia}/recogida`)).then(r => r.pedido),
   entregar: (guia: string, d: DatosEntrega) => datos<{ pedido: Pedido }>(api.post(`/pedidos/${guia}/entrega`, d)).then(r => r.pedido),

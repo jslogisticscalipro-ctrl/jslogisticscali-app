@@ -41,10 +41,10 @@ export async function crearGuias(files: File[], mensajeroId: string, avance: (ms
     const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
     const p = await api.pedidos.crear(yo.esAdmin || yo.esAsistente ? { mensajeroId } : {});
     hechas.push(p.guia);
-    await api.pedidos.subirArchivo(p.guia, "salida", foto);
-    await api.pedidos.subirArchivo(p.guia, "mini", mini).catch(() => {});
+    // La foto y la miniatura no dependen una de otra: suben a la vez. La guía se muestra con la respuesta, sin recargar todo.
+    await Promise.all([api.pedidos.subirArchivo(p.guia, "salida", foto), api.pedidos.subirArchivo(p.guia, "mini", mini).catch(() => {})]);
+    ponerPedido(p);
   }
-  if (!DEMO) await recargar();
   return hechas;
 }
 
@@ -56,8 +56,7 @@ export async function recoger(guia: string, f: File) {
     return demoPedido(guia, { estado: "pendiente", creado: Date.now(), mini });
   }
   const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
-  await api.pedidos.subirArchivo(guia, "salida", foto);
-  await api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {});
+  await Promise.all([api.pedidos.subirArchivo(guia, "salida", foto), api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {})]);
   ponerPedido(await api.pedidos.recoger(guia));
 }
 
@@ -107,8 +106,11 @@ export async function ponerRemitente(guias: string[], cliente: T.ClienteBreve) {
 export interface Entrega { destinatario: string; valorCobrado: number; metodo: Metodo; cuentaJs: "" | "nequi" | "bancolombia"; cambio: boolean; gasto: number; gastoNota: string }
 export async function entregar(guia: string, d: Entrega, foto: Blob | null, firma: HTMLCanvasElement | null) {
   if (DEMO) { const p = S.pedidos[guia]; return demoPedido(guia, { ...d, estado: "entregado", entregado: Date.now(), difCobro: p.aCobrar ? d.valorCobrado - (d.metodo === "transf_cliente" ? 0 : p.aCobrar) : 0 }); }
-  if (foto) await api.pedidos.subirArchivo(guia, "entrega", foto);
-  if (firma) await api.pedidos.subirArchivo(guia, "firma", await firmaABlob(firma));
+  // Foto y firma suben a la vez; la entrega se confirma cuando las dos ya están.
+  await Promise.all([
+    foto ? api.pedidos.subirArchivo(guia, "entrega", foto) : null,
+    firma ? firmaABlob(firma).then(b => api.pedidos.subirArchivo(guia, "firma", b)) : null,
+  ]);
   ponerPedido(await api.pedidos.entregar(guia, { ...d, cuentaJs: d.cuentaJs || undefined }));
 }
 export async function noEntregado(guia: string, motivo: Motivo, nota: string, foto: Blob | null) {
@@ -124,6 +126,20 @@ export async function actualizarPedido(guia: string, d: Omit<api.CambiosPedido, 
     domiPagoMedio: (d.domiPagoMedio ?? S.pedidos[guia].domiPagoMedio) as Medio | "", ...(d.domiPagado && !S.pedidos[guia].domiPagado ? { domiPagoFecha: Date.now(), domiPagoUid: yo.uid } : {}) } as Partial<Pedido>);
   const { domiPagoMedio, ...resto } = d;
   ponerPedido(await api.pedidos.actualizar(guia, { ...resto, ...(domiPagoMedio ? { domiPagoMedio } : {}) }));
+}
+/** Remitente o domicilio a varias guías con una sola petición (el servidor lo hace en una transacción). En demo, una por una en memoria. */
+export async function enBloque(d: { modo: "sin" | "serv"; guias: string[]; clienteId?: string; valorServicio?: number; usarTarifaCliente?: boolean }) {
+  if (DEMO) {
+    const tarifa = (g: string) => Number(S.clientes[S.pedidos[g].clienteId]?.tarifa) || 0, serv = d.valorServicio || 0;
+    for (const g of d.guias) {
+      if (d.modo === "sin") demoPedido(g, { clienteId: d.clienteId!, clienteNombre: S.clientes[d.clienteId!]?.nombre || "", ...(serv ? { valorServicio: serv } : {}) });
+      else demoPedido(g, { valorServicio: d.usarTarifaCliente === false ? serv : tarifa(g) || serv });
+    }
+    return d.guias.length;
+  }
+  const n = await api.pedidos.enBloque(d);
+  await recargarSolo(["pedidos", "clientes"]);
+  return n;
 }
 export async function cambioEntregado(guia: string) {
   if (DEMO) return demoPedido(guia, { cambioRecibido: Date.now() });
