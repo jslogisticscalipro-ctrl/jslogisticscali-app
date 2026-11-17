@@ -1,7 +1,7 @@
 /* Llamadas al backend, agrupadas por recurso. */
 import { api } from "./cliente";
 import type { FiltroMetodoEntregas, PaginaEntregasPeriodo, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, Archivo, TipoArchivo, Cliente, ClienteBreve, Mensajero, Movimiento, Pedido, Usuario, Motivo, MetodoEntrega, Rol, TipoPersonal, Medio, EstadoPedido,
-  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
+  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, DetalleLiquidacion, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
 import { FalloApi } from "./cliente";
 
 const datos = <T>(p: Promise<{ data: T }>) => p.then(r => r.data);
@@ -241,6 +241,8 @@ export const liquidaciones = {
   ...coleccion<Liquidacion, Partial<Liquidacion>>("/liquidaciones", "liquidaciones", "liquidacion"),
   /** Liquidar y cerrar el período: responde con todo lo que guardó (la liquidación, la entrega final y el adelanto) para pintarlo sin recargar. */
   cerrar: (d: Partial<Liquidacion>) => datos<{ liquidacion: Liquidacion; recaudo: Recaudo | null; movAdelanto: CajaMovimiento | null }>(api.post("/liquidaciones", d)),
+  /** El detalle de una liquidación: sus entregas, el nombre de los remitentes y si es la última (se puede reabrir). */
+  detalle: (id: string) => datos<DetalleLiquidacion>(api.get(`/liquidaciones/${encodeURIComponent(id)}`)),
   /** Cierres recientes filtrados y paginados: 5 en celular y 9 en computador. */
   pagina: (f: { dia?: string; estado?: string; buscar?: string }, pagina: number, porPagina: number) =>
     opcional(datos<PaginaLiquidaciones>(api.get("/liquidaciones/pagina", { params: { ...f, pagina, porPagina } })), { liquidaciones: [], pagina: 1, porPagina, total: 0, paginas: 1 })

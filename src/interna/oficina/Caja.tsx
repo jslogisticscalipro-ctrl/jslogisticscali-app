@@ -17,7 +17,7 @@ import { resumenPatinadoresDemo } from "../patinador/demoCaja";
 import { SelectorFecha } from "../Calendario";
 
 import { borrarDe, cambiarMedio, cierreOficina, deshacerArqueo, quitarDevolucion, liquidar, movCaja, reabrirLiquidacion, recibirDinero, arqueo } from "../acciones";
-import { aLiq, motivoError, useDatos } from "../datos";
+import { aLiq, aPedido, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
 import { avisoContado, diaAntesDelArqueo } from "./comun";
 import { EnBloque } from "./modales";
@@ -109,7 +109,7 @@ export default function Caja({ pintar }: { pintar: () => void }) {
   }, [E.tabCaja]);
   const ir = (t: typeof E.tabCaja) => { E.tabCaja = t; guardarLocal("js_caja", t); pintar(); };
   // Liquidaciones recientes: el servidor entrega solo la página que se necesita.
-  const porPaginaLiq = usePorPaginaLiquidaciones(), version = verDatos;
+  const porPaginaLiq = usePorPaginaLiquidaciones();
   const [paginaLiq, setPaginaLiq] = useState(E.paginaLiq), arribaLiq = useRef<HTMLDivElement>(null);
   const [diaLiq, setDiaLiq] = useState(E.diaLiq), [estadoLiq, setEstadoLiq] = useState(E.estadoLiq);
   const [textoBusqLiq, setTextoBusqLiq] = useState(E.buscarLiq), [buscarLiq, setBuscarLiq] = useState(E.buscarLiq);
@@ -119,8 +119,16 @@ export default function Caja({ pintar }: { pintar: () => void }) {
   const cambiarEstadoLiq = (e: typeof estadoLiq) => { setEstadoLiq(e); E.estadoLiq = e; E.paginaLiq = 1; setPaginaLiq(1); };
   const limpiarLiq = () => { setDiaLiq(""); setEstadoLiq("todos"); setTextoBusqLiq(""); setBuscarLiq(""); Object.assign(E, { diaLiq: "", estadoLiq: "todos", buscarLiq: "", paginaLiq: 1 }); setPaginaLiq(1); };
   const hayFiltrosLiq = !!(diaLiq || buscarLiq || estadoLiq !== "todos");
+  // La lista solo se vuelve a pedir si cambiaron las liquidaciones (se liquidó, se reabrió, se quitó un adelanto, otra persona
+  // liquidó), no con cualquier cambio de datos ni con la recarga automática. La firma sale de las liquidaciones en memoria.
+  const firmaLiq = useMemo(() => {
+    let n = 0, ult = 0, debe = 0, adel = 0;
+    for (const l of Object.values(S.liquidaciones)) { n++; ult = Math.max(ult, Number(l.fecha) || 0); debe += Number(l.debe) || 0; adel += Number(l.adelanto) || 0; }
+    return n + "|" + ult + "|" + debe + "|" + adel;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verDatos, pintaDatos]);
   const qLiq = useQuery({
-    queryKey: ["liquidaciones", "pagina", diaLiq, estadoLiq, buscarLiq, paginaLiq, porPaginaLiq, version],
+    queryKey: ["liquidaciones", "pagina", diaLiq, estadoLiq, buscarLiq, paginaLiq, porPaginaLiq, firmaLiq],
     enabled: yo.esAdmin && E.tabCaja === "liquidaciones",
     placeholderData: keepPreviousData,
     queryFn: (): Promise<PaginaLiqUI> => DEMO
@@ -676,14 +684,37 @@ function Liquidar({ mid }: { mid: string }) {
   </div>;
 }
 
+/** Lo que necesita el detalle de una liquidación: sus entregas, el nombre de cada remitente y si se puede reabrir. */
+interface DetalleLiqUI { liq: LiqS; entregas: Pedido[]; clientes: Record<string, string>; esUltima: boolean }
+function detalleLiquidacionDemo(id: string): DetalleLiqUI | null {
+  const l = S.liquidaciones[id]; if (!l) return null;
+  return { liq: l, entregas: (l.guias || []).map(g => S.pedidos[g]).filter(Boolean), clientes: {}, esUltima: liquidacionesDe(l.mensajeroId)[0]?.id === id };
+}
+
 export function VerLiquidacion({ id }: { id: string }) {
   useDatos();
-  const v = useVentana(), l = S.liquidaciones[id], [sub, setSub] = useState<"resumen" | "entregas">("resumen");
-  if (!l) return <div className="vacio">Esta liquidación ya no existe.</div>;
-  const nom = S.mensajeros[l.mensajeroId]?.nombre || "Mensajero", esUltima = liquidacionesDe(l.mensajeroId)[0]?.id === id, ps = (l.guias || []).map(g => S.pedidos[g]).filter(Boolean);
+  const v = useVentana(), [sub, setSub] = useState<"resumen" | "entregas">("resumen"), [reabriendo, setReabriendo] = useState(false);
+  // El detalle se pide al servidor (la liquidación, sus entregas y si es la última) y no depende de tener todos los pedidos
+  // y todas las liquidaciones en memoria. Mientras llega se pinta el resumen con lo que ya hay.
+  const qDet = useQuery({
+    queryKey: ["liquidaciones", "detalle", id], gcTime: 0, // sin copia vieja: "es la última" cambia al liquidar o reabrir
+    queryFn: async (): Promise<DetalleLiqUI | null> => {
+      if (DEMO) return detalleLiquidacionDemo(id);
+      const r = await apiLiquidaciones.detalle(id);
+      return { liq: aLiq(r.liquidacion), entregas: r.entregas.map(aPedido), clientes: r.clientes, esUltima: r.esUltima };
+    }
+  });
+  const det = qDet.data, l = S.liquidaciones[id] ?? det?.liq;
+  if (!l) return qDet.isPending ? <div className="vacio" role="status">Cargando…</div> : <div className="vacio">Esta liquidación ya no existe.</div>;
+  const nom = S.mensajeros[l.mensajeroId]?.nombre || "Mensajero", esUltima = det ? det.esUltima : liquidacionesDe(l.mensajeroId)[0]?.id === id, ps = det?.entregas ?? [];
+  const cargandoEntregas = qDet.isPending && (l.guias || []).length > 0, nomCli = (cid: string) => det?.clientes[cid] || nombreCliente(cid) || "";
   const orden = ps.slice().sort((a, b) => (a.entregado || 0) - (b.entregado || 0)), conGasto = ps.some(p => gastoDe(p));
   const suma = (f: (p: Pedido) => number) => ps.reduce((a, p) => a + f(p), 0), totServ = suma(servicio), totGasto = suma(gastoDe), totCobrado = suma(p => Number(p.valorCobrado) || 0);
-  const reabrir = async () => { try { await reabrirLiquidacion(id); v.avisar("Período reabierto"); v.cerrar(); } catch (e) { noSePudo(v, "No se pudo reabrir")(e); } };
+  const reabrir = async () => {
+    if (reabriendo) return;
+    setReabriendo(true);
+    try { await reabrirLiquidacion(id); v.avisar("Período reabierto"); v.cerrar(); } catch (e) { setReabriendo(false); noSePudo(v, "No se pudo reabrir")(e); }
+  };
   const fila = (t: string, val: ReactNode, cls = "") => <div className="liq-fila"><dt>{t}</dt><dd className={cls}>{val}</dd></div>;
   return <div className="entrega-modal liq-modal">
     <header className="entrega-cab"><div className="liq-titulo"><h2>Liquidación <span className="entrega-estado">{nom}</span></h2>
@@ -693,7 +724,7 @@ export function VerLiquidacion({ id }: { id: string }) {
       <div className={"liq-resultado " + (l.debe > 0 ? "debe" : l.debe < 0 ? "sobra" : "cero")}><b>Resultado: {textoLiq(l.debe)}</b>{l.adelanto ? <span>Adelanto de sueldo: {pesos(l.adelanto)}</span> : null}</div>
       <div className="seg liq-seg" role="tablist" aria-label="Detalle de la liquidación">
         <button type="button" role="tab" aria-selected={sub === "resumen"} onClick={() => setSub("resumen")}>Resumen financiero</button>
-        <button type="button" role="tab" aria-selected={sub === "entregas"} onClick={() => setSub("entregas")}>Entregas incluidas ({ps.length})</button>
+        <button type="button" role="tab" aria-selected={sub === "entregas"} onClick={() => setSub("entregas")}>Entregas incluidas ({cargandoEntregas ? (l.guias || []).length : ps.length})</button>
       </div>
     </div>
     <div className="liq-cuerpo">
@@ -710,14 +741,14 @@ export function VerLiquidacion({ id }: { id: string }) {
           {fila("Transferencias a JS", pesos(l.transfJs))}{fila("Pagado directo al cliente", pesos(l.transfCli))}
         </dl></section>
         <div className="liq-sueldo"><span>Sueldo del período</span><b>{pesos(l.sueldo)}</b></div>
-      </> : ps.length ? <>
+      </> : cargandoEntregas ? <div className="vacio" role="status">Cargando las entregas…</div> : ps.length ? <>
         <div className="tabla-env liq-tabla"><table><thead><tr><th>Guía</th><th>Remitente</th><th>Recibió</th><th>Método</th><th className="n">Servicio</th>{conGasto && <th className="n">Flete</th>}<th className="n">Cobrado</th></tr></thead><tbody>
-          {orden.map(p => <tr key={p.guia}><td className="guia">{p.guia}</td><td>{nombreCliente(p.clienteId) || "—"}</td><td>{p.destinatario}</td><td>{metodoTxt(p)}</td><td className="n">{pesos(servicio(p))}</td>{conGasto && <td className="n">{gastoDe(p) ? pesos(gastoDe(p)) : "—"}</td>}<td className="n">{pesos(p.valorCobrado)}</td></tr>)}
+          {orden.map(p => <tr key={p.guia}><td className="guia">{p.guia}</td><td>{nomCli(p.clienteId) || "—"}</td><td>{p.destinatario}</td><td>{metodoTxt(p)}</td><td className="n">{pesos(servicio(p))}</td>{conGasto && <td className="n">{gastoDe(p) ? pesos(gastoDe(p)) : "—"}</td>}<td className="n">{pesos(p.valorCobrado)}</td></tr>)}
           <tr><td colSpan={4}><b>Total</b></td><td className="n"><b>{pesos(totServ)}</b></td>{conGasto && <td className="n"><b>{pesos(totGasto)}</b></td>}<td className="n"><b>{pesos(totCobrado)}</b></td></tr>
         </tbody></table></div>
         <ul className="liq-entregas">
           {orden.map(p => <li key={p.guia}>
-            <div><span className="guia">{p.guia}</span><b>{nombreCliente(p.clienteId) || "—"}</b><strong>{pesos(p.valorCobrado)}</strong></div>
+            <div><span className="guia">{p.guia}</span><b>{nomCli(p.clienteId) || "—"}</b><strong>{pesos(p.valorCobrado)}</strong></div>
             <div><span>{p.destinatario ? "Recibió: " + p.destinatario + " · " : ""}{metodoTxt(p)}</span><span>Servicio: {pesos(servicio(p))}{gastoDe(p) ? " · Flete: " + pesos(gastoDe(p)) : ""}</span></div>
           </li>)}
           <li className="liq-totales"><div><b>Totales ({ps.length} {pl(ps.length, "entrega")})</b></div><div><span>Servicio: <b>{pesos(totServ)}</b></span><span>Cobrado: <b>{pesos(totCobrado)}</b></span></div></li>
@@ -725,7 +756,7 @@ export function VerLiquidacion({ id }: { id: string }) {
       </> : <div className="vacio">Esta liquidación no tiene entregas.</div>}
     </div>
     {esUltima && <footer className="liq-pie"><p>Al reabrir, las entregas vuelven al período actual y se revierte el adelanto. El dinero recibido se conserva en la caja.</p>
-      <button type="button" className="btn peligro chico" id="lReabrir" onClick={reabrir}><RotateCcw size={14} aria-hidden="true" /> Reabrir período</button></footer>}
+      <button type="button" className="btn peligro chico" id="lReabrir" onClick={reabrir} disabled={reabriendo}><RotateCcw size={14} aria-hidden="true" /> {reabriendo ? "Guardando…" : "Reabrir período"}</button></footer>}
   </div>;
 }
 

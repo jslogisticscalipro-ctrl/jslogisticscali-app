@@ -228,6 +228,8 @@ export interface Cambio { id: string; fecha: string; quien: string; op: string; 
 /** Una página del historial (5 en celular y 13 en computador). */
 export interface PaginaHistorial { cambios: Cambio[]; pagina: number; porPagina: number; total: number; paginas: number }
 /** Una página de liquidaciones recientes (5 en celular y 9 en computador). */
+/** Una liquidación con las entregas que cerró, el nombre de cada remitente (por id) y si se puede reabrir. */
+export interface DetalleLiquidacion { liquidacion: Liquidacion; entregas: Pedido[]; clientes: Record<string, string>; esUltima: boolean }
 export interface PaginaLiquidaciones { liquidaciones: Liquidacion[]; pagina: number; porPagina: number; total: number; paginas: number }
 export interface EnPapelera { id: string; col: string; docId: string; resumen: string; fecha: string; quien: string }
 
