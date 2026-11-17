@@ -1,5 +1,5 @@
 /* Oficina → Caja: cierre del día, caja general, mensajeros, cajas de oficina, dinero recibido y liquidaciones (igual al prototipo). */
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Clock, Eye, Info, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -54,10 +54,17 @@ export default function Caja({ pintar }: { pintar: () => void }) {
   const [hojaMens, setHojaMens] = useState(false), [borradorMens, setBorradorMens] = useState<{ estado: EstadoMens; orden: OrdenMens }>({ estado: "todos", orden: "nombre" });
   // Lo de la sub-pestaña Mensajeros (el período de cada uno recorre todos los pedidos) solo se calcula si está abierta.
   const verMens = E.tabCaja === "mensajeros";
-  const pendM: Record<string, number> = {}; if (verMens) Object.values(S.pedidos).filter(p => p.estado === "pendiente").forEach(p => (pendM[p.mensajeroId] = (pendM[p.mensajeroId] || 0) + 1));
-  const pms: Record<string, ReturnType<typeof periodoMensajero>> = {}; if (verMens) Object.keys(S.mensajeros).forEach(id => (pms[id] = periodoMensajero(id)));
-  // los mensajeros siempre, para poder darles base al empezar el día
-  const ids = !verMens ? [] : listaOrdenada(S.mensajeros, "nombre").filter(esRepartidor).map(m => m.id).filter(id => { const pm = pms[id]; return tipoDe(S.mensajeros[id]) === "mensajero" || pm.ps.length || pm.recs.length || pm.debe || pendM[id]; });
+  // El período de cada mensajero recorre todos los datos: se calcula una vez por cambio de datos, no en cada tecla del buscador ni al abrir un filtro.
+  const { version: verDatos, pinta: pintaDatos } = useDatos();
+  const { pendM, pms, ids } = useMemo(() => {
+    const pendM: Record<string, number> = {}, pms: Record<string, ReturnType<typeof periodoMensajero>> = {};
+    if (!verMens) return { pendM, pms, ids: [] as string[] };
+    Object.values(S.pedidos).filter(p => p.estado === "pendiente").forEach(p => (pendM[p.mensajeroId] = (pendM[p.mensajeroId] || 0) + 1));
+    Object.keys(S.mensajeros).forEach(id => (pms[id] = periodoMensajero(id)));
+    // los mensajeros siempre, para poder darles base al empezar el día
+    const ids = listaOrdenada(S.mensajeros, "nombre").filter(esRepartidor).map(m => m.id).filter(id => { const pm = pms[id]; return tipoDe(S.mensajeros[id]) === "mensajero" || pm.ps.length || pm.recs.length || pm.debe || pendM[id]; });
+    return { pendM, pms, ids };
+  }, [verMens, verDatos, pintaDatos]);
   // Las KPI de arriba suman a todos; los filtros solo cambian qué tarjetas se ven.
   const qMens = sinTildes(buscarMens.trim()), activosMens = (estadoMens !== "todos" ? 1 : 0) + (ordenMens !== "nombre" ? 1 : 0);
   const idsVis = !verMens ? [] : ids.filter(id => (!qMens || sinTildes(S.mensajeros[id].nombre).includes(qMens)) && (estadoMens === "todos" || (estadoMens === "con_deuda" ? pms[id].debe > 0 : estadoMens === "en_ruta" ? (pendM[id] || 0) > 0 : pms[id].debe === 0)))
@@ -65,10 +72,10 @@ export default function Caja({ pintar }: { pintar: () => void }) {
   const limpiarMens = () => { setBuscarMens(""); setEstadoMens("todos"); setOrdenMens("nombre"); };
   const buscadorMens = <div className="liq-buscar aq-buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
     <input type="search" placeholder="Buscar mensajero…" aria-label="Buscar mensajero por nombre" autoComplete="off" value={buscarMens} onChange={e => setBuscarMens(e.target.value)} /></div>;
-  const tot = { debe: 0, ef: 0, tj: 0, tc: 0 }; ids.forEach(id => { const pm = pms[id], tt = totales(pm.ps); tot.debe += pm.debe; tot.ef += tt.efectivo; tot.tj += tt.transfJs; tot.tc += tt.transfCli; });
+  const tot = useMemo(() => { const t = { debe: 0, ef: 0, tj: 0, tc: 0 }; ids.forEach(id => { const pm = pms[id], tt = totales(pm.ps); t.debe += pm.debe; t.ef += tt.efectivo; t.tj += tt.transfJs; t.tc += tt.transfCli; }); return t; }, [ids, pms]);
   // El dinero recibido del día se reparte: mensajeros en su sub-pestaña y patinadores en la suya (son las mismas entregas de dinero).
   const verPat = E.tabCaja === "patinadores";
-  const recsTodos = !verMens && !verPat ? [] : Object.values(S.recaudos).filter(r => diaDe(r.fecha) === E.diaCaja).sort((a, b) => a.fecha - b.fecha);
+  const recsTodos = useMemo(() => !verMens && !verPat ? [] : Object.values(S.recaudos).filter(r => diaDe(r.fecha) === E.diaCaja).sort((a, b) => a.fecha - b.fecha), [verMens, verPat, E.diaCaja, verDatos, pintaDatos]);
   const esDePatinador = (r: { mensajeroId: string }) => tipoDe(S.mensajeros[r.mensajeroId]) === "patinador";
   const base = (id: string) => (yo.esAdmin ? v.abrir(<MovCaja tipo="sale" pre={{ cat: "base", personaId: id }} />, "centrada") : v.abrir(<BaseDesdeOficina mid={id} />, "centrada"));
   const quitarRec = async (id: string) => {
@@ -102,7 +109,7 @@ export default function Caja({ pintar }: { pintar: () => void }) {
   }, [E.tabCaja]);
   const ir = (t: typeof E.tabCaja) => { E.tabCaja = t; guardarLocal("js_caja", t); pintar(); };
   // Liquidaciones recientes: el servidor entrega solo la página que se necesita.
-  const porPaginaLiq = usePorPaginaLiquidaciones(), { version } = useDatos();
+  const porPaginaLiq = usePorPaginaLiquidaciones(), version = verDatos;
   const [paginaLiq, setPaginaLiq] = useState(E.paginaLiq), arribaLiq = useRef<HTMLDivElement>(null);
   const [diaLiq, setDiaLiq] = useState(E.diaLiq), [estadoLiq, setEstadoLiq] = useState(E.estadoLiq);
   const [textoBusqLiq, setTextoBusqLiq] = useState(E.buscarLiq), [buscarLiq, setBuscarLiq] = useState(E.buscarLiq);
@@ -531,7 +538,7 @@ function BloquePatinadores() {
 /* ---------- Mensajeros: recibir dinero, liquidar ---------- */
 /** `pat` = es un patinador: se muestra y se calcula con lo que anotó de los clientes, no con pedidos. La entrega se guarda igual. */
 export function RecibirDinero({ mid, pat }: { mid: string; pat?: ResumenPatinador }) {
-  const v = useVentana(), m = S.mensajeros[mid], pm = periodoMensajero(mid), debe = pat ? pat.debe : pm.debe;
+  const v = useVentana(), m = S.mensajeros[mid], { version: ver, pinta } = useDatos(), pm = useMemo(() => periodoMensajero(mid), [mid, ver, pinta]), debe = pat ? pat.debe : pm.debe;
   const [val, setVal] = useState(debe > 0 ? String(debe) : ""), [medio, setMedio] = useState<Medio>("efectivo"), [nota, setNota] = useState(""), [guardando, setGuardando] = useState(false);
   if (!m) return null;
   const guardar = async () => {
@@ -594,13 +601,18 @@ export function CambiarMedio({ col, id }: { col: "recaudos" | "movimientos"; id:
 }
 
 function Liquidar({ mid }: { mid: string }) {
-  const v = useVentana(), m = S.mensajeros[mid], pm = periodoMensajero(mid), t = totales(pm.ps), sueldo = ganaPorcentaje(m) ? sueldoPedidos(pm.ps) : 0;
-  const enRuta = Object.values(S.pedidos).filter(p => p.estado === "pendiente" && p.mensajeroId === mid).length, sinValor = pm.ps.filter(p => !Number(p.valorServicio)).length;
-  const sems = semanasAdelanto();
+  const v = useVentana(), m = S.mensajeros[mid], { version: ver, pinta } = useDatos();
+  // Lo que recorre todos los datos se calcula una vez por cambio de datos, no en cada tecla del valor.
+  const { pm, t, sueldo, enRuta, sinValor, sems } = useMemo(() => {
+    const pm = periodoMensajero(mid);
+    return { pm, t: totales(pm.ps), sueldo: ganaPorcentaje(S.mensajeros[mid]) ? sueldoPedidos(pm.ps) : 0,
+      enRuta: Object.values(S.pedidos).filter(p => p.estado === "pendiente" && p.mensajeroId === mid).length, sinValor: pm.ps.filter(p => !Number(p.valorServicio)).length, sems: semanasAdelanto() };
+  }, [mid, ver, pinta]);
   const [desglose, setDesglose] = useState(false), [val, setVal] = useState(String(pm.debe > 0 ? pm.debe : 0)), [medio, setMedio] = useState<Medio>("efectivo"), [conAdel, setConAdel] = useState(true), [sem, setSem] = useState(sems[0][0]), [guardando, setGuardando] = useState(false);
+  const netoSemana = useMemo(() => Math.round(sueldoPersonaSemana(mid, sem).neto), [mid, sem, ver, pinta]);
   if (!m) return null;
   // adelanto = lo que queda debiendo, sin pasar del sueldo que le falta por cobrar esa semana (el sueldo no puede quedar negativo)
-  const adelanto = (d: number) => (d > 0 && conAdel ? Math.max(0, Math.min(d, Math.round(sueldoPersonaSemana(mid, sem).neto))) : 0);
+  const adelanto = (d: number) => (d > 0 && conAdel ? Math.max(0, Math.min(d, netoSemana)) : 0);
   const d = pm.debe - (Number(val) || 0), adel = adelanto(d), resto = d - adel;
   const guardar = async () => {
     const valor = Number(val) || 0; if (valor < 0) return v.avisar("El valor no puede ser negativo");
