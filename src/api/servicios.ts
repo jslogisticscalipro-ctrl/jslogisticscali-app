@@ -106,7 +106,7 @@ export const pedidos = {
   /** La imagen va como cuerpo binario (ya comprimida en el celular), una por petición. */
   subirArchivo: (guia: string, tipo: Exclude<TipoArchivo, "previa">, imagen: Blob) =>
     datos<{ archivo: Archivo }>(api.post(`/pedidos/${guia}/archivos/${tipo}`, imagen, {
-      headers: { "Content-Type": imagen.type || "image/jpeg" }, timeout: 60_000
+      headers: { "Content-Type": imagen.type || "image/jpeg" }, params: { sinUrl: 1 }, timeout: 60_000
     })).then(d => d.archivo)
 };
 
