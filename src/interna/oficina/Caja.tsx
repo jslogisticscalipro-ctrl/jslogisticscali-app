@@ -1,7 +1,7 @@
 /* Oficina → Caja: cierre del día, caja general, mensajeros, cajas de oficina, dinero recibido y liquidaciones (igual al prototipo). */
 import { memo, useCallback, useMemo, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Clock, Eye, Info, RotateCcw, SlidersHorizontal } from "lucide-react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   S, yo, hoy, hora, pesos, diaDe, horaCorta, listaOrdenada, periodoMensajero, totales, tipoDe, esRepartidor, sueldoTexto, textoLiq, ajusteTxt, ganaPorcentaje, sueldoPedidos,
   sueldoPersonaSemana, semanasAdelanto, semanasSueldo, liquidacionesDe, asistentes, cajaOficina, sumaMedios, yaContado, puedoCambiarMedio, yaLiquidado, resumenCaja, arqueosCaja,
@@ -551,21 +551,24 @@ function BloquePatinadores() {
 /* ---------- Mensajeros: recibir dinero, liquidar ---------- */
 /** `pat` = es un patinador: se muestra y se calcula con lo que anotó de los clientes, no con pedidos. La entrega se guarda igual. */
 export function RecibirDinero({ mid, pat }: { mid: string; pat?: ResumenPatinador }) {
-  const v = useVentana(), m = S.mensajeros[mid], { version: ver, pinta } = useDatos(), pm = useMemo(() => periodoMensajero(mid), [mid, ver, pinta]), debe = pat ? pat.debe : pm.debe;
+  // Un patinador no tiene período de pedidos: lo que debe sale del resumen del servidor, así que no se calcula (recorre todos los pedidos).
+  const v = useVentana(), qc = useQueryClient(), m = S.mensajeros[mid], { version: ver, pinta } = useDatos(), pm = useMemo(() => (pat ? null : periodoMensajero(mid)), [mid, pat, ver, pinta]), debe = pat ? pat.debe : pm!.debe;
   const [val, setVal] = useState(debe > 0 ? String(debe) : ""), [medio, setMedio] = useState<Medio>("efectivo"), [nota, setNota] = useState(""), [guardando, setGuardando] = useState(false);
   if (!m) return null;
   const guardar = async () => {
     const valor = Number(val); if (!(valor > 0)) return v.avisar("Escribe un valor mayor a cero");
     setGuardando(true);
     try { await recibirDinero({ mensajeroId: mid, valor, medio, nota: nota.trim() }); const falta = debe - valor; v.cerrar();
+      // El resumen de patinadores es recibido − entregado: se pone ya con lo que se acaba de entregar (hoy), sin esperar la consulta que lo confirma.
+      if (pat) qc.setQueriesData<ResumenPatinador[]>({ queryKey: ["patinador", "resumen"] }, lista => lista?.map(x => x.mensajeroId === mid ? { ...x, entregado: x.entregado + valor, entregadoHoy: x.entregadoHoy + valor, debe: x.debe - valor } : x));
       v.avisar(`Recibido ${pesos(valor)} de ${m.nombre}. ${falta > 0 ? "Le falta " + pesos(falta) : falta < 0 ? "Entregó " + pesos(-falta) + " de más" : "Quedó a paz y salvo"}`); }
     catch (e) { setGuardando(false); noSePudo(v, "No se pudo guardar")(e); }
   };
   return <div className="recibir">
     <Cab sub={<span className="sub">{m.nombre}</span>}><h2>Recibir dinero</h2></Cab>
     {pat ? <dl className="datos"><dt>Recibido de clientes</dt><dd>{pesos(pat.recibido)}</dd><dt>Ya entregó</dt><dd>{pesos(pat.entregado)}</dd><dt>Debe</dt><dd className="neg">{pesos(pat.debe)}</dd></dl>
-    : <dl className="datos"><dt>Efectivo cobrado</dt><dd>{pesos(pm.efectivo)}</dd>{pm.base ? <><dt>Base para vueltos</dt><dd>{pesos(pm.base)}</dd></> : null}{pm.gastos ? <><dt>Fletes / gastos pagados</dt><dd>− {pesos(pm.gastos)}</dd></> : null}{pm.cobros ? <><dt>Pagos de clientes que recibió</dt><dd>{pesos(pm.cobros)}</dd></> : null}
-      {pm.anterior ? <><dt>Pendiente anterior</dt><dd>{pesos(pm.anterior)}</dd></> : null}<FilaAjuste a={pm.ajuste} /><dt>Ya entregó</dt><dd>{pesos(pm.recibido)}</dd><dt>Debe</dt><dd className="neg">{pesos(pm.debe)}</dd></dl>}
+    : pm ? <dl className="datos"><dt>Efectivo cobrado</dt><dd>{pesos(pm.efectivo)}</dd>{pm.base ? <><dt>Base para vueltos</dt><dd>{pesos(pm.base)}</dd></> : null}{pm.gastos ? <><dt>Fletes / gastos pagados</dt><dd>− {pesos(pm.gastos)}</dd></> : null}{pm.cobros ? <><dt>Pagos de clientes que recibió</dt><dd>{pesos(pm.cobros)}</dd></> : null}
+      {pm.anterior ? <><dt>Pendiente anterior</dt><dd>{pesos(pm.anterior)}</dd></> : null}<FilaAjuste a={pm.ajuste} /><dt>Ya entregó</dt><dd>{pesos(pm.recibido)}</dd><dt>Debe</dt><dd className="neg">{pesos(pm.debe)}</dd></dl> : null}
     <div className="linea2"><div className="campo"><label htmlFor="rVal">Valor que entrega</label><input id="rVal" type="number" inputMode="numeric" min="0" step="1000" autoFocus value={val} onFocus={e => e.target.select()} onChange={e => setVal(e.target.value)} /></div>
       <div className="campo"><label htmlFor="rMedio">Medio</label><select id="rMedio" value={medio} onChange={e => setMedio(e.target.value as Medio)}>{MEDIOS_K.map(k => <option key={k} value={k}>{MEDIOS[k]}</option>)}</select></div></div>
     <div className="campo"><label htmlFor="rNota">Nota (opcional)</label><input id="rNota" placeholder="Ej: primera entrega de la tarde" value={nota} onChange={e => setNota(e.target.value)} /></div>
