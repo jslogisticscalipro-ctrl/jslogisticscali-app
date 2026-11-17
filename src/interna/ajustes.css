@@ -2241,3 +2241,6 @@
 .jsl .qr-sticker{display:flex;flex-direction:column;gap:10px;margin:8px 0}
 .jsl .qr-auto{display:flex;align-items:center;gap:8px;font-size:.92rem;color:var(--tinta)}
 .jsl .qr-auto input{width:18px;height:18px}
+
+/* Inicio del mensajero (celular): acceso "Escanear QR" (reemplaza a "En ruta", que ya está en las cifras de abajo). */
+.jsl .im-acc-qr{background:var(--azul-claro);border-color:color-mix(in srgb,var(--azul) 30%,transparent);color:var(--azul);box-shadow:none}

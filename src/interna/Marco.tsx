@@ -6,7 +6,8 @@ import { necesarias, ProveedorDatos, useColecciones, useDatos } from "./datos";
 import { ProveedorMenuColapsado, ProveedorVentana, Icono, IconoSalir, useVentana } from "./ui";
 import { E, estadoInicialPedidos, guardarLocal } from "./estado";
 import { useTema } from "./tema";
-import { AvisoSolicitud, Campanita, IconoCampana, useSolicitudes } from "./Solicitudes";
+import { AvisoSolicitud, Campanita, useSolicitudes } from "./Solicitudes";
+import { CampanaMensajero } from "./mensajero/CampanaMensajero";
 import { S, fechaLarga, hoy, horaActual, type Pedido } from "./motor";
 import { pendientesMios, porRecogerMios, devolucionesPorDefinirMios } from "./mensajero/pendientes";
 import { useEscritorio } from "../lib/pantalla";
@@ -131,7 +132,6 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
   const corto = nom.includes("@") ? nom.split("@")[0] : nom.split(" ")[0];
   const iniciales = nom.replace(/@.*/, "").split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join("").toUpperCase();
   const cambiarRol = (r: typeof E.rol) => { E.rol = r; guardarLocal("js_rol", r); pintar(); scrollTo(0, 0); };
-  const pendientesMensajero = pendientesMios().length + porRecogerMios().length + devolucionesPorDefinirMios().length;
 
   useEffect(() => {
     if (!perfilAbierto) return;
@@ -177,7 +177,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
             {esAdmin && <button aria-pressed={E.rol === "admin"} id="btnAdmin" onClick={() => cambiarRol("admin")}>Administración</button>}
           </div>
         )}
-        {!enMensajero && <Campanita />}
+        {enMensajero ? <CampanaMensajero version={version} pintar={pintar} /> : <Campanita />}
         {nom && <span className="avatar" id="avatar" aria-hidden="true">{iniciales}</span>}
         <button type="button" className="tema" onClick={cambiarTema} aria-label={oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} title={oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}>{oscuro ? <IconoSol /> : <IconoLuna />}</button>
         <button className="salir" id="btnSalir" aria-label="Cerrar sesión" onClick={() => salir()}><IconoSalir /><span>Salir</span></button>
@@ -185,7 +185,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
       <div className="barra-movil">
         <div className="marca marca-movil"><img src="/logo_JS_sin_texto.webp" alt="JS Logistics" /></div>
         <div className="barra-movil-acciones">
-          {!enMensajero ? <Campanita /> : <button type="button" className="campana" aria-label={`Pedidos pendientes: ${pendientesMensajero}`} onClick={() => ir("pend")}><IconoCampana />{pendientesMensajero > 0 && <span className="campana-num" aria-hidden="true">{pendientesMensajero > 9 ? "9+" : pendientesMensajero}</span>}</button>}
+          {enMensajero ? <CampanaMensajero version={version} pintar={pintar} /> : <Campanita />}
           <div className="perfil-area" ref={perfilRef}>
             <button type="button" className="perfil-disparador avatar" aria-label="Menú de perfil y opciones" aria-expanded={perfilAbierto} aria-controls="perfil-movil" onClick={() => setPerfilAbierto(v => !v)}>{iniciales || "JS"}</button>
             {perfilAbierto && <div className="perfil-popover" id="perfil-movil" role="group" aria-label="Opciones de perfil">

@@ -1,13 +1,13 @@
 /* App del mensajero, igual al prototipo (pintarMensajero, inicioMensajeroHtml, miSueldoHtml y los diálogos de entrega). */
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Camera, ChevronDown, ChevronRight, HandCoins, ImagePlus, Plus, SlidersHorizontal, Truck, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Camera, ChevronDown, ChevronRight, HandCoins, ImagePlus, Plus, QrCode, SlidersHorizontal, X } from "lucide-react";
 import { SelectorFecha } from "../Calendario";
 import { useQuery } from "@tanstack/react-query";
 import { useUsuario } from "../../auth/Sesion";
 import { E, guardarLocal } from "../estado";
 import {
   S, yo, cerrado, delDia, diaDe, hora, hoy, listaOrdenada, esRepartidor, nombreCliente, pesos, totales, periodoMensajero, sueldoTexto, textoLiq, ajusteTxt,
-  MEDIOS, MOTIVOS, metodoTxt, moverDia, pct, nivelEfectividad, CONSEJOS_MOTIVO, semanaDe, tipoDe, sueldoPersonaSemana, entregasPorDia, COLOR_ESTADO,
+  MEDIOS, MOTIVOS, metodoTxt, moverDia, pct, nivelEfectividad, semanaDe, tipoDe, sueldoPersonaSemana, entregasPorDia, COLOR_ESTADO,
   moverSemana, diaSueldo, servicio, DIAS_SEM, fechaLarga, pendienteAnterior, DESC_SUELDO,
 } from "../motor";
 import { Columnas, Dona, EtqEstado, FiltroDia, Icono, IconoCamara, Kpi, Mini, Paginador, pl, useVentana } from "../ui";
@@ -293,11 +293,10 @@ function PedidosMensajero({ pintar }: { pintar: () => void }) {
 }
 
 /* ---- Panel del mensajero: su rendimiento y recomendaciones para mejorar (solo con sus propios pedidos) ---- */
-type Reco = [cls: "sin" | "ent" | "pend" | "ruta", ic: string, titulo: string, texto: string, ir?: string];
 function InicioMensajero({ mid, enlace, irM, btnFoto, btnGaleria }: { mid: string; enlace: React.ReactNode; irM: (k: string) => void; btnFoto: () => void; btnGaleria: () => void }) {
+  const ventana = useVentana();
   const m = S.mensajeros[mid], h = hoy(), H = 36e5, desde = moverDia(h, -29), mis = Object.values(S.pedidos).filter(p => p.mensajeroId === mid);
   const enRuta = mis.filter(p => p.estado === "pendiente").sort((a, b) => a.creado - b.creado), viejos = enRuta.filter(p => Date.now() - p.creado > 24 * H);
-  const porRecoger = mis.filter(p => p.estado === "aceptado").length;
   const entHoy = mis.filter(p => p.estado === "entregado" && diaDe(p.entregado || 0) === h).length, devHoy = mis.filter(p => p.estado === "devuelto" && diaDe(p.entregado || 0) === h).length;
   const mes = mis.filter(p => cerrado(p) && diaDe(p.entregado || 0) >= desde), ent = mes.filter(p => p.estado === "entregado"), dev = mes.filter(p => p.estado === "devuelto");
   const efec = pct(ent.length, mes.length), [nivel, clsNivel] = nivelEfectividad(efec, mes.length);
@@ -314,23 +313,6 @@ function InicioMensajero({ mid, enlace, irM, btnFoto, btnGaleria }: { mid: strin
   const tiempoTxt = (x: number) => (x < 1 ? Math.round(x * 60) + " min" : x.toFixed(1).replace(".", ",") + " h");
   const coma = (x: number) => x.toFixed(1).replace(".", ",");
   const nomMotivo = (k: string) => MOTIVOS[k as keyof typeof MOTIVOS] || "Otro motivo";
-  // recomendaciones: primero lo urgente, luego cómo mejorar, y siempre reconocer lo que va bien
-  const R: Reco[] = [];
-  if (porRecoger) R.push(["sin", "pedidos", `Tienes ${porRecoger} ${pl(porRecoger, "pedido")} por recoger`, "La oficina te los asignó desde una solicitud. Ve por ellos y pulsa “Recoger” para tomarle la foto al paquete: sin la foto no los puedes entregar.", "recoger"]);
-  if (viejos.length) R.push(["sin", "pend", `Tienes ${viejos.length} ${pl(viejos.length, "pedido")} con más de un día en ruta`, "Entrégalos hoy o márcalos como “No se pudo entregar” con el motivo, para que la oficina le avise al remitente.", "entregar"]);
-  const ultimaEntregaPlata = Math.max(pm.ul?.fecha || 0, ...pm.recs.map(r => r.fecha)), desdeCuando = ultimaEntregaPlata || pm.ps[0]?.entregado || Date.now(), diasSinEntregar = Math.floor((Date.now() - desdeCuando) / (24 * H));
-  if (pm.debe >= 100000 && diasSinEntregar >= 1) R.push(["sin", "plata", `Llevas ${pesos(pm.debe)} sin entregar a la oficina`, `Hace ${diasSinEntregar === 1 ? "más de un día" : diasSinEntregar + " días"} que no le pasas plata a la oficina. Entrégala hoy: andar con mucha plata es un riesgo para ti, y la caja de la empresa no cuadra hasta que la recibe.`, "caja"]);
-  if (mes.length >= 10 && efec < 90 && motivos.length) { const [k, n] = motivos[0], c = CONSEJOS_MOTIVO[k] || CONSEJOS_MOTIVO.otro;
-    R.push(["pend", "dev", `Devuelves ${100 - efec} de cada 100 pedidos`, `La causa que más se repite es “${nomMotivo(k)}” (${n} ${n === 1 ? "vez" : "veces"} en 30 días). Consejo: ${c[1]}`]); }
-  else if (motivos.length && motivos[0][1] >= 3) { const [k, n] = motivos[0], c = CONSEJOS_MOTIVO[k] || CONSEJOS_MOTIVO.otro;
-    R.push(["ruta", "dev", c[0], `“${nomMotivo(k)}” se repitió ${n} veces en 30 días. ${c[1]}`]); }
-  if (conDif) R.push(["pend", "plata", `${conDif} ${pl(conDif, "entrega")} con un valor cobrado distinto al de la guía`, "Antes de entregar, mira en la app cuánto hay que cobrar y cuenta la plata delante del cliente. Si el cliente paga otro valor, escribe en la nota por qué."]);
-  if (tiempos.length >= 10 && mediana > 5) R.push(["ruta", "ruta", `Tus pedidos tardan ${tiempoTxt(mediana)} desde que salen`, "Organiza la ruta por barrios antes de salir y llama primero a los que más lejos están. Entregar más rápido te deja hacer más domicilios en el día."]);
-  if (diasSem >= 2 && diasTrab >= 5 && porDiaSem < porDia * 0.8) R.push(["ruta", "pedidos", `Esta semana vas en ${coma(porDiaSem)} entregas por día`, `Tu promedio del último mes es ${coma(porDia)}. Pide en la oficina más pedidos de tu zona o arranca un poco más temprano.`]);
-  if (mes.length >= 10 && efec >= 95) R.unshift(["ent", "ok", "¡Vas excelente!", `Entregaste ${efec}% de tus pedidos en los últimos 30 días. Sigue llamando antes de llegar y confirmando direcciones: eso es lo que hace la diferencia.`]);
-  else if (!R.length && mes.length) R.push(["ent", "ok", "Vas bien", "No hay nada urgente. Sigue confirmando direcciones y llamando antes de llegar para mantener tus entregas al día."]);
-  if (!mes.length && !enRuta.length && !porRecoger) R.push(["ruta", "nuevo", "Empieza tu día", "Toma la foto de cada pedido al salir. Aquí vas a ver cómo te va y consejos para mejorar."]);
-  const orden = { sin: 0, ent: 1, pend: 2, ruta: 3 }; R.sort((a, b) => orden[a[0]] - orden[b[0]]);
   const dias = entregasPorDia(mis, 14), tot14 = dias.reduce((a, d) => a + d.n, 0);
   return <>
     <div className="dash-cab"><div><h1>Hola, {m.nombre}</h1><p className="sub">Así va tu trabajo{enlace}</p></div></div>
@@ -340,7 +322,7 @@ function InicioMensajero({ mid, enlace, irM, btnFoto, btnGaleria }: { mid: strin
         <button type="button" className="im-acc im-acc-foto" onClick={btnFoto}><Camera aria-hidden /><span>Tomar foto</span></button>
         <button type="button" className="im-acc" onClick={btnGaleria}><ImagePlus aria-hidden className="im-ic-azul" /><span>Subir galería</span></button>
         <button type="button" className="im-acc im-acc-verde" onClick={() => { E.subRecM = "dinero"; irM("recepcion"); }}><HandCoins aria-hidden /><span>Recibir pago</span></button>
-        <button type="button" className="im-acc im-acc-sec" onClick={() => irM("entregar")}><Truck aria-hidden /><span>En ruta</span>{enRuta.length > 0 && <b className="im-num">{enRuta.length}</b>}</button>
+        <button type="button" className="im-acc im-acc-qr" onClick={() => ventana.abrir(<DlgEscanearQr mensajeroId={mid} />, "centrada")}><QrCode aria-hidden /><span>Escanear QR</span></button>
       </div>
       <button type="button" className="im-falta" onClick={() => irM("caja")}>
         <span className="im-falta-txt"><small>Te falta entregar</small><b>{pesos(pm.debe)}</b><em>{pm.debe > 0 ? "Plata que debes llevar a la oficina" : "Estás al día con la oficina"}</em></span>
@@ -364,8 +346,6 @@ function InicioMensajero({ mid, enlace, irM, btnFoto, btnGaleria }: { mid: strin
       <Kpi ico="plata" lbl="Te falta entregar" val={pesos(pm.debe)} pie={<small>{pm.debe > 0 ? "Plata que debes llevar a la oficina" : "Estás al día con la oficina"}</small>} onClick={() => irM("caja")} cls="oscuro" />
     </div>
     </div>
-    <section className="tarjeta" style={{ marginBottom: 16 }}><h3>Recomendaciones para ti</h3>
-      <div className="recos">{R.slice(0, 4).map(([cls, ic, t, txt, ir], i) => <div key={i} className={"reco " + cls}><span className="reco-ic"><Icono n={ic} /></span><div><b>{t}</b><p>{txt}</p>{ir && <button className="btn sec chico" onClick={() => irM(ir)}>{ir === "entregar" ? "Ver por entregar" : ir === "recoger" ? "Ver por recoger" : "Ver mi caja"}</button>}</div></div>)}</div></section>
     <div className="dash">
       <section className="tarjeta c4"><h3>Efectividad <span className={"etq " + clsNivel}>{nivel}</span></h3>
         <Dona segs={[{ t: "Entregados", n: ent.length, c: COLOR_ESTADO.entregado }, { t: "Devueltos", n: dev.length, c: COLOR_ESTADO.devuelto }]} centro={mes.length ? efec + "%" : "—"} sub="últimos 30 días" /></section>
