@@ -386,11 +386,18 @@ export async function arqueo(esperado: Record<string, number>, contado: Record<s
     });
   }
   void esperado; // en el servidor lo calcula él
-  await tras(api.caja.arqueo({ contado, nota }));
+  // El servidor responde con lo que guardó (el conteo y sus diferencias): se pinta ya, y en segundo plano se confirma con la caja y el corte.
+  const a = await api.caja.arqueo({ contado, nota });
+  tocar(s => { for (const c of a.movimientos) s.cajamovs[c.id] = aCaja(c); });
+  void recargarSolo(["cajamovs", "corte"]).catch(() => {});
 }
 export async function deshacerArqueo(aid: string) {
   if (DEMO) return tocar(s => { for (const c of Object.values(s.cajamovs)) if (c.arqueoId === aid || c.id === aid) delete s.cajamovs[c.id]; });
-  await tras(api.caja.deshacerArqueo(aid));
+  const r = await api.caja.deshacerArqueo(aid);
+  // Se quitan el conteo y sus diferencias y el corte vuelve al arqueo anterior (lo que ya no está contado se puede cambiar otra vez).
+  yo.corteRemoto = r.corte ? new Date(r.corte).getTime() || 0 : 0;
+  tocar(s => { for (const c of Object.values(s.cajamovs)) if (c.arqueoId === aid || c.id === aid) delete s.cajamovs[c.id]; });
+  void recargarSolo(["cajamovs", "corte"]).catch(() => {});
 }
 
 /* ---------- sueldos ---------- */
@@ -415,7 +422,9 @@ export async function devolverAdelanto(aid: string, valor: number, medio: Medio)
 /** Cierre de la caja de oficina: en el servidor es una sola acción; en demo se registran las piezas como en el prototipo. */
 export async function cierreOficina(auid: string, entrega: Record<Medio, number>, nota: string, piezas: Omit<CajaMov, "id">[]) {
   if (DEMO) { for (const p of piezas) await movCaja(p); return; }
-  await tras(api.caja.cierreOficina(auid, { ...entrega, nota }));
+  const r = await api.caja.cierreOficina(auid, { ...entrega, nota });
+  tocar(s => { for (const c of r.movimientos) s.cajamovs[c.id] = aCaja(c); });
+  void recargarSolo(["cajamovs"]).catch(() => {});
 }
 /** Quitar una devolución de adelanto: el servidor le resta lo devuelto al adelanto. */
 export async function quitarDevolucion(k: string) {

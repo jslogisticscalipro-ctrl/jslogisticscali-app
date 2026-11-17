@@ -475,7 +475,7 @@ function HacerArqueo() {
       {Object.values(c).some(x => x !== "") ? <><span>Total contado {pesos(tot)} · esperado {pesos(esp)}</span><b>{!todo ? "Escribe los tres medios" : dt === 0 ? (mueve ? "La plata da exacto: cada medio queda como lo contaste" : "Cuadra exacto") : dt < 0 ? "Falta " + pesos(-dt) + " en total" : "Sobra " + pesos(dt) + " en total"}</b></> : <><span>Total</span><b>La app espera {pesos(esp)}</b></>}
     </div>
     <div className="campo"><label htmlFor="aqNota">Nota (opcional)</label><input id="aqNota" placeholder="Ej: arqueo de cierre del sábado" value={nota} onChange={ev => setNota(ev.target.value)} /></div>
-    <button className="btn ok" id="aqGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>Guardar arqueo</button>
+    <button className="btn ok" id="aqGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar arqueo"}</button>
   </>;
 }
 
@@ -502,7 +502,7 @@ export function MovCaja({ tipo, pre = {} }: { tipo: "entra" | "sale"; pre?: { ca
     <div className={"campo " + (conSemana ? "" : "oculto")} id="cjSemC"><label htmlFor="cjSem">Semana del sueldo</label><select id="cjSem" value={sem} onChange={e => setSem(e.target.value)}>{sems.map(([w, t]) => <option key={w} value={w}>{t}</option>)}</select></div>
     <div className="linea2"><div className="campo"><label>Día en que salió o entró la plata</label><SelectorFecha id="cjDia" valor={dia} alCambiar={setDia} etiqueta="Día" minimo={diaMinCaja()} maximo={hoy()} obligatorio /></div>
       <div className="campo"><label htmlFor="cjCon">Detalle (opcional)</label><input id="cjCon" placeholder="Ej: gasolina, arriendo de mayo" value={con} onChange={e => setCon(e.target.value)} /></div></div>
-    <button className="btn form-guardar" id="cjGuardar" disabled={guardando} onClick={guardar}>Guardar</button>
+    <button className="btn form-guardar" id="cjGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar"}</button>
   </div>;
 }
 
@@ -788,7 +788,7 @@ function MovOficina({ auid, tipo }: { auid: string; tipo: "base" | "entrega" }) 
       : <div className="linea2">{MEDIOS_K.map((k, i) => <div className="campo" style={{ minWidth: 120 }} key={k}><label htmlFor={"of_" + k}>{MEDIOS[k]}</label><input id={"of_" + k} type="number" inputMode="numeric" min="0" step="1000" autoFocus={i === 0} value={vals[k]} onChange={e => setVals({ ...vals, [k]: e.target.value })} /></div>)}</div>}
     {!base && <div id="ofRes" className="sub" style={{ margin: "-4px 0 10px" }}>{entregas.map(([m, x], i) => { const queda = Math.round(C.saldo[m] - x); return <span key={m}>{i ? " · " : ""}{MEDIOS[m]}: {sb.has(m) ? <><b className="pos">sobrante {pesos(sb.get(m)!)}</b>, queda en $ 0</> : nv.has(m) ? `pagó ${pesos(nv.get(m)!)} más de lo que entró; queda en $ 0 (no es sobrante)` : queda ? `queda ${pesos(queda)} en su caja` : "queda en $ 0"}</span>; })}</div>}
     <div className="campo"><label htmlFor="ofNota">Nota (opcional)</label><input id="ofNota" placeholder={base ? "Ej: base del día" : "Ej: cierre del día"} value={nota} onChange={e => setNota(e.target.value)} /></div>
-    <button className={"btn " + (base ? "" : "ok")} id="ofGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>{base ? "Entregar base" : "Registrar cierre"}</button>
+    <button className={"btn " + (base ? "" : "ok")} id="ofGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : base ? "Entregar base" : "Registrar cierre"}</button>
   </>;
 }
 /** Base para vueltos que el asistente le da a un mensajero desde su caja de oficina (en efectivo, con la hora del momento). */
@@ -810,6 +810,6 @@ function BaseDesdeOficina({ mid: mid0 }: { mid?: string }) {
     {elegir && <div className="campo"><label htmlFor="bmMen">Mensajero</label><select id="bmMen" autoFocus value={mid} onChange={e => setMid(e.target.value)}><option value="">Elige…</option>{ms.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></div>}
     <div className="linea2"><div className="campo"><label htmlFor="bmVal">Valor</label><input id="bmVal" type="number" inputMode="numeric" min="0" step="1000" autoFocus={!elegir} value={val} onChange={e => setVal(e.target.value)} /></div>
       <div className="campo"><label htmlFor="bmNota">Nota (opcional)</label><input id="bmNota" placeholder="Ej: base del día" value={nota} onChange={e => setNota(e.target.value)} /></div></div>
-    <button className="btn" id="bmGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>Dar base</button>
+    <button className="btn" id="bmGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Dar base"}</button>
   </>;
 }

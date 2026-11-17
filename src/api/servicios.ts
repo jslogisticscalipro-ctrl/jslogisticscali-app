@@ -263,12 +263,13 @@ export const caja = {
   movimientosPagina: (f: { dia?: string; medio?: string }, pagina: number, porPagina: number) =>
     datos<PaginaCajaMovimientos>(api.get("/caja/movimientos/pagina", { params: limpio({ ...f, pagina, porPagina }) })),
   /** Lo esperado lo calcula el servidor; se manda solo lo contado. */
-  arqueo: (d: { contado: Record<string, number>; nota: string }) => api.post("/caja/arqueos", d),
+  arqueo: (d: { contado: Record<string, number>; nota: string }) => datos<{ arqueo: { id: string; fecha: string; movimientos: CajaMovimiento[] } }>(api.post("/caja/arqueos", d)).then(r => r.arqueo),
   /** Cierre de la caja de oficina de un asistente: lo que entrega en cada medio (el servidor registra sobrantes y ajustes). */
-  cierreOficina: (uid: string, d: { efectivo: number; nequi: number; bancolombia: number; nota: string }) => api.post(`/caja/oficinas/${uid}/cierre`, d),
+  cierreOficina: (uid: string, d: { efectivo: number; nequi: number; bancolombia: number; nota: string }) => datos<{ movimientos: CajaMovimiento[] }>(api.post(`/caja/oficinas/${uid}/cierre`, d)),
   /** Devolución (todo o parte) de un adelanto de sueldo. */
   devolverAdelanto: (id: string, d: { valor: number; medio: string }) => api.post(`/caja/adelantos/${id}/devolucion`, d),
-  deshacerArqueo: (id: string) => api.delete(`/caja/arqueos/${id}`)
+  /** Responde con el corte que queda (la hora del arqueo anterior) o `null` si ya no hay ninguno. */
+  deshacerArqueo: (id: string) => datos<{ id: string; corte: string | null }>(api.delete(`/caja/arqueos/${id}`))
 };
 export const historial = {
   /** Cambios desde `desde` (día YYYY-MM-DD en Colombia), los más nuevos primero. */
