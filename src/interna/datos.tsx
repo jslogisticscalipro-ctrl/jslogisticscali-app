@@ -60,9 +60,18 @@ const DE_PESTANA: Record<string, Coleccion[]> = {
 };
 /** Colecciones que necesita la vista. El modo mensajero y las pestañas que muestran el resumen de la caja o los sueldos
     (Inicio, Caja, Cuentas, Sueldos, Más) piden todas: esos cálculos cruzan pedidos, movimientos, caja, jornadas y usuarios. */
-export function necesarias(modo: string, tab: string): Coleccion[] {
+/** Caja: cada sub-pestaña pide solo lo que usa (la lista y el detalle de liquidaciones y arqueos salen del servidor).
+    "caja" y "mensajeros" calculan con todo. Ante la duda, una colección de más es mejor que una de menos. */
+const DE_CAJA: Record<string, Coleccion[]> = {
+  liquidaciones: ["mensajeros"],
+  arqueos: ["mensajeros", "cajamovs", "corte"],
+  patinadores: ["mensajeros", "recaudos", "cajamovs", "corte", "liquidaciones"]
+};
+export function necesarias(modo: string, tab: string, sub?: string): Coleccion[] {
   if (modo === "patinador") return ["mensajeros"]; // solo para elegir el patinador: su caja la trae su propia consulta
-  return modo === "mensajero" ? TODAS : DE_PESTANA[tab] ?? TODAS;
+  if (modo === "mensajero") return TODAS;
+  if (tab === "caja" && sub && DE_CAJA[sub]) return DE_CAJA[sub];
+  return DE_PESTANA[tab] ?? TODAS;
 }
 
 /** Todas las guías que el usuario puede ver, de 1000 en 1000. La oficina no pide miniaturas (sus pantallas no las pintan
@@ -137,9 +146,20 @@ interface Datos {
   precargar: (cols: readonly Coleccion[]) => void;
   /** ¿Están ya en memoria (aunque se estén actualizando)? */
   tiene: (cols: readonly Coleccion[]) => boolean;
+  /** Llegó un aviso en tiempo real (GET /eventos) con las colecciones que cambiaron: se vuelven a pedir solo las que están en uso. */
+  cambioRemoto: (cols: readonly string[]) => void;
+  /** El canal en tiempo real se conectó o se cayó: con el canal vivo la recarga periódica es lenta; sin él, la de siempre. */
+  canalEstado: (vivo: boolean) => void;
 }
 const Ctx = createContext<Datos | null>(null);
 const CADA = 45_000;
+/** Con el canal en tiempo real conectado, la recarga periódica queda solo como red de seguridad (por si se pierde un aviso). */
+const CADA_CON_CANAL = 300_000;
+/** Los avisos que llegan juntos (una acción suele cambiar varias colecciones) se juntan en una sola recarga. */
+const JUNTAR_AVISOS = 1_500;
+/** Tiempo mínimo entre dos recargas de la misma colección por avisos (los pedidos se bajan de 1000 en 1000). */
+const MIN_COLECCION = 4_000;
+const MIN_PEDIDOS = 45_000;
 /** Cuánto se considera fresca una colección al cambiar de pestaña. */
 const TTL = 30_000;
 
@@ -199,19 +219,54 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   const precargar = useCallback((cols: readonly Coleccion[]) => { void traer(cols); }, [traer]);
   const tiene = useCallback((cols: readonly Coleccion[]) => DEMO ? demoCargado.current : cols.every(c => cache.cargado(c)), [cache]);
 
+  const [canal, setCanal] = useState(false);
+  const huboCaida = useRef(false), aviso = useRef({ t: 0, lote: new Map<Coleccion, number>() });
+  const canalEstado = useCallback((vivo: boolean) => {
+    setCanal(vivo);
+    if (!vivo) { huboCaida.current = true; return; }
+    // Si el canal se cayó y volvió, se pudieron perder avisos: se actualiza lo que está en pantalla.
+    if (huboCaida.current) { huboCaida.current = false; void traer(enPantalla(), true); }
+  }, [traer]);
+  // Un aviso dice qué colecciones cambiaron (los nombres de las tablas; "meta" es la hora del último arqueo). Se juntan unos
+  // segundos y se piden solo las que están en uso. Si la colección ya se pidió DESPUÉS del aviso (por ejemplo la recarga que
+  // hace esta misma pantalla al guardar), esa petición ya trae el cambio y no se repite.
+  const cambioRemoto = useCallback((cols: readonly string[]) => {
+    const a = aviso.current, ahora = Date.now();
+    for (const n of cols) { const c = (n === "meta" ? "corte" : n) as Coleccion; if (TODAS.includes(c) && !a.lote.has(c)) a.lote.set(c, ahora); }
+    if (!a.lote.size || a.t) return;
+    const vaciar = () => {
+      a.t = 0;
+      const usadas = enPantalla(), pedir: Coleccion[] = [], ahora2 = Date.now();
+      let espera = 0;
+      for (const [c, desde] of [...a.lote]) {
+        if (!usadas.includes(c)) { a.lote.delete(c); cache.olvidar(c); continue; } // al abrirla se pide de nuevo, sin mostrar cifras de antes
+        if (cache.inicio(c) > desde) { a.lote.delete(c); continue; } // ya se pidió después del aviso: trae el cambio
+        // Entre una recarga y la siguiente de la misma colección pasa un mínimo (más largo para los pedidos, que son lo más pesado):
+        // en un día con muchos cambios no se vuelve a bajar todo a cada rato, y nunca más seguido que la recarga de antes.
+        const falta = (c === "pedidos" ? MIN_PEDIDOS : MIN_COLECCION) - (ahora2 - cache.inicio(c));
+        if (falta > 0) { espera = espera ? Math.min(espera, falta) : falta; continue; }
+        a.lote.delete(c); cache.invalidar(c); pedir.push(c);
+      }
+      if (pedir.length) void traer(pedir, true);
+      if (a.lote.size && espera) a.t = window.setTimeout(vaciar, espera + 50);
+    };
+    a.t = window.setTimeout(vaciar, JUNTAR_AVISOS);
+  }, [cache, traer]);
+
   useEffect(() => {
-    // Cada 45 segundos (y al volver a la app) se actualiza solo lo que está en pantalla.
-    const t = setInterval(() => { if (document.visibilityState === "visible") void traer(enPantalla(), true); }, CADA);
+    // Cada 45 segundos (cada 5 minutos con el canal en tiempo real) y al volver a la app se actualiza solo lo que está en pantalla.
+    const t = setInterval(() => { if (document.visibilityState === "visible") void traer(enPantalla(), true); }, canal ? CADA_CON_CANAL : CADA);
     const alVolver = () => { if (document.visibilityState === "visible") void traer(enPantalla()); };
     document.addEventListener("visibilitychange", alVolver);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", alVolver); };
-  }, [traer]);
+  }, [traer, canal]);
+  useEffect(() => () => window.clearTimeout(aviso.current.t), []);
 
   // Con `fn` cambió el almacén (lo que respondió el servidor, o la demo): sube `version` y las listas se vuelven a pedir.
   // Sin `fn` es solo volver a pintar (cambió la pestaña o un filtro de `E`): antes eso también volvía a pedir la página.
   const tocar = useCallback((fn?: (s: Almacen) => void) => { if (fn) { fn(S); setVersion(v => v + 1); } else setPinta(v => v + 1); }, []);
   conectar(tocar, recargar, recargarSolo);
-  return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, precargar, tiene }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, precargar, tiene, cambioRemoto, canalEstado }}>{children}</Ctx.Provider>;
 }
 
 /** Muestra "Cargando…" hasta que estén las colecciones (para las ventanas que se abren desde otra pestaña). */

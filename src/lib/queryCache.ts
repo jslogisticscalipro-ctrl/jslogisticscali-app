@@ -6,7 +6,7 @@
  * Las listas paginadas (Pedidos, Clientes, Historial…) usan TanStack Query, que ya hace esto mismo con `staleTime`.
  * Vive solo en memoria: al recargar la página empieza vacía. No guarda nada en el navegador.
  */
-interface Entrada<T> { valor?: T; hasta: number; enCurso?: Promise<T>; cargado: boolean }
+interface Entrada<T> { valor?: T; hasta: number; enCurso?: Promise<T>; cargado: boolean; inicio?: number }
 
 export function crearCacheConsultas<K extends string>(ttlMs: number) {
   const entradas = new Map<K, Entrada<unknown>>();
@@ -15,6 +15,8 @@ export function crearCacheConsultas<K extends string>(ttlMs: number) {
   return {
     /** ¿Se trajo hace menos del TTL (y no se invalidó)? */
     fresco: (k: K) => (entradas.get(k)?.hasta ?? 0) > Date.now(),
+    /** Hora (del navegador) en que empezó la última petición de esa clave; 0 si nunca. Una petición que empezó después de un aviso de cambio ya incluye el cambio. */
+    inicio: (k: K) => entradas.get(k)?.inicio ?? 0,
     /** ¿Se trajo alguna vez? (aunque ya esté vencido: se puede mostrar mientras llega lo nuevo) */
     cargado: (k: K) => !!entradas.get(k)?.cargado,
     /**
@@ -28,7 +30,7 @@ export function crearCacheConsultas<K extends string>(ttlMs: number) {
       if (e.enCurso && !forzar) return e.enCurso;
       if (!forzar && e.cargado && e.hasta > Date.now()) return Promise.resolve(e.valor as T);
       const previa = e.enCurso?.catch(() => undefined) ?? Promise.resolve();
-      const p: Promise<T> = previa.then(cargar).then(v => { e.valor = v; e.cargado = true; e.hasta = Date.now() + ttlMs; return v; })
+      const p: Promise<T> = previa.then(() => { e.inicio = Date.now(); return cargar(); }).then(v => { e.valor = v; e.cargado = true; e.hasta = Date.now() + ttlMs; return v; })
         .finally(() => { if (e.enCurso === p) e.enCurso = undefined; });
       e.enCurso = p;
       return p;

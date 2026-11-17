@@ -68,9 +68,9 @@ export default function AppInterna() {
 }
 
 function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boolean; cambiarTema: () => void; colapsado: boolean; alternarMenu: () => void }) {
-  useEventos();
   const { usuario, salir } = useSesion();
-  const { version, tocar, error, precargar } = useDatos();
+  const { version, tocar, error, precargar, cambioRemoto, canalEstado } = useDatos();
+  useEventos({ alCambiar: cambioRemoto, alCanal: canalEstado });
   const ventana = useVentana();
   const escritorio = useEscritorio();
   const [perfilAbierto, setPerfilAbierto] = useState(false);
@@ -104,7 +104,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
     elegir = k => { if (ADMIN_ESCRITORIO.some(([x]) => x === k)) { E.tabA = "mas"; E.subMas = k; } else E.tabA = k; };
   }
   // Apuntar o tocar un botón del menú ya empieza a bajar esa pestaña (solo en la oficina; el mensajero va en un solo archivo).
-  const intencion = (k: string) => { if (enOficina) { precargarPestana(k); precargar(necesarias(E.rol, k)); } };
+  const intencion = (k: string) => { if (enOficina) { precargarPestana(k); precargar(necesarias(E.rol, k, k === "caja" ? E.tabCaja : undefined)); } };
   const ir = (k: string) => {
     if (k === "pedidos" && enOficina) Object.assign(E, { filtroA: estadoInicialPedidos(), buscarA: "", mensPedA: "", diaPedA: "", paginaA: 1 });
     elegir(k); pintar(); scrollTo(0, 0);
@@ -114,7 +114,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
   );
   // Solo se piden al servidor las colecciones que usa la vista abierta (las demás, al abrirla).
   const cargaVista = enOficina && E.tabA === "inicio" ? <DashboardSkeleton /> : cargando;
-  const listo = useColecciones(necesarias(E.rol, enMensajero ? E.tabM : E.tabA));
+  const listo = useColecciones(necesarias(E.rol, enMensajero ? E.tabM : E.tabA, !enMensajero && E.tabA === "caja" ? E.tabCaja : undefined));
   // La pestaña y sub-pestaña quedan en la URL y en sessionStorage para la próxima recarga.
   usePersistedTab(CLAVE_NAV_ADMIN, usuario?.id || "", navegacionActual());
   const cabe = items.length <= 5, vis = cabe ? items : items.slice(0, 4), resto = cabe ? [] : items.slice(4);
@@ -156,7 +156,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
   // cuando el navegador queda libre se adelanta esa descarga para que la pestaña ya esté lista al tocarla.
   useEffect(() => {
     if (!enOficina) return;
-    const ir = () => precargar(necesarias(E.rol, "caja"));
+    const ir = () => precargar(necesarias(E.rol, "caja", E.tabCaja));
     if ("requestIdleCallback" in window) { const id = requestIdleCallback(ir, { timeout: 4000 }); return () => cancelIdleCallback(id); }
     const id = setTimeout(ir, 2500);
     return () => clearTimeout(id);
