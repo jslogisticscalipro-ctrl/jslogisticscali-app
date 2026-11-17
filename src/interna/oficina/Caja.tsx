@@ -1,5 +1,5 @@
 /* Oficina → Caja: cierre del día, caja general, mensajeros, cajas de oficina, dinero recibido y liquidaciones (igual al prototipo). */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Clock, Eye, Info, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -432,11 +432,21 @@ function DetalleArqueo({ id }: { id: string }) {
 }
 
 /** Arqueo: el conteo real de la plata. La diferencia queda como faltante o sobrante y lo contado ya no se cambia. */
+/** Fila de un medio: solo se repinta cuando cambia lo que se escribió en ese medio. */
+const FilaArqueo = memo(function FilaArqueo({ k, valor, esperado, primero, alCambiar }: { k: Medio; valor: string; esperado: number; primero: boolean; alCambiar: (k: Medio, valor: string) => void }) {
+  const d = valor === "" ? null : Math.round(Number(valor) - esperado);
+  return <div className="linea2" style={{ alignItems: "center" }}>
+    <div className="campo"><label htmlFor={"aq_" + k}>{MEDIOS[k]} que cuentas</label><input id={"aq_" + k} type="number" inputMode="numeric" min="0" step="100" autoFocus={primero} value={valor} onChange={ev => alCambiar(k, ev.target.value)} /></div>
+    <div className="campo"><span className="lbl">La app espera</span><b style={{ fontSize: "1.1rem" }}>{pesos(esperado)}</b><span className="sub" style={{ margin: 0 }}>{d === null ? "" : d === 0 ? <b className="pos">Cuadra</b> : d < 0 ? <b className="neg">Falta {pesos(-d)}</b> : <b className="pos">Sobra {pesos(d)}</b>}</span></div></div>;
+});
+
 function HacerArqueo() {
-  const v = useVentana(), { e, of, sinCuenta } = esperadoArqueo(), conOf = Object.values(of).some(x => Math.round(x));
+  // Lo esperado se calcula una sola vez al abrir: recorre todos los datos de la caja y no cambia mientras se escribe.
+  const [{ e, of, sinCuenta }] = useState(esperadoArqueo), v = useVentana(), conOf = Object.values(of).some(x => Math.round(x));
   const [c, setC] = useState<Record<string, string>>({ efectivo: "", nequi: "", bancolombia: "" }), [nota, setNota] = useState(""), [guardando, setGuardando] = useState(false);
   const esp = Object.values(e).reduce((x, y) => x + y, 0), tot = Object.values(c).reduce((x, y) => x + (Number(y) || 0), 0), dt = Math.round(tot - esp);
   const todo = Object.values(c).every(x => x !== ""), mueve = MEDIOS_K.some(k => c[k] !== "" && Math.round(Number(c[k]) - e[k]));
+  const cambiar = useCallback((k: Medio, valor: string) => setC(a => ({ ...a, [k]: valor })), []);
   const guardar = async () => {
     if (Object.values(c).some(x => x === "")) return v.avisar("Escribe lo que contaste en cada medio (0 si no hay nada)");
     if (Object.values(c).some(x => Number(x) < 0)) return v.avisar("Los valores no pueden ser negativos");
@@ -450,9 +460,7 @@ function HacerArqueo() {
     <p className="sub">Escribe lo que cuentas en cada medio: el efectivo en la mano y el saldo que ves en la app de Nequi y de Bancolombia. La diferencia queda registrada como faltante o sobrante y desde ese momento esa plata ya no se puede cambiar.</p>
     {sinCuenta ? <div className="aviso alerta">Hay {pesos(sinCuenta)} en transferencias a JS sin cuenta asignada. Antes del arqueo, abre esos pedidos y elige si llegaron a Nequi o a Bancolombia.</div> : null}
     {conOf ? <div className="aviso">No cuentes el efectivo que tienen las cajas de oficina ({pesos(of.efectivo)}): ese se cuenta cuando recibes el cierre de cada asistente. Nequi y Bancolombia sí cuéntalos completos, como los ves en su app.</div> : null}
-    {MEDIOS_K.map((k, i) => { const d = c[k] === "" ? null : Math.round(Number(c[k]) - e[k]); return <div className="linea2" style={{ alignItems: "center" }} key={k}>
-      <div className="campo"><label htmlFor={"aq_" + k}>{MEDIOS[k]} que cuentas</label><input id={"aq_" + k} type="number" inputMode="numeric" min="0" step="100" autoFocus={i === 0} value={c[k]} onChange={ev => setC({ ...c, [k]: ev.target.value })} /></div>
-      <div className="campo"><span className="lbl">La app espera</span><b style={{ fontSize: "1.1rem" }}>{pesos(e[k])}</b><span className="sub" style={{ margin: 0 }}>{d === null ? "" : d === 0 ? <b className="pos">Cuadra</b> : d < 0 ? <b className="neg">Falta {pesos(-d)}</b> : <b className="pos">Sobra {pesos(d)}</b>}</span></div></div>; })}
+    {MEDIOS_K.map((k, i) => <FilaArqueo key={k} k={k} valor={c[k]} esperado={e[k]} primero={i === 0} alCambiar={cambiar} />)}
     <div className={"res-liq " + (!todo ? "cero" : dt < 0 ? "debe" : dt > 0 ? "sobra" : "cero")} style={{ margin: "6px 0 12px" }}>
       {Object.values(c).some(x => x !== "") ? <><span>Total contado {pesos(tot)} · esperado {pesos(esp)}</span><b>{!todo ? "Escribe los tres medios" : dt === 0 ? (mueve ? "La plata da exacto: cada medio queda como lo contaste" : "Cuadra exacto") : dt < 0 ? "Falta " + pesos(-dt) + " en total" : "Sobra " + pesos(dt) + " en total"}</b></> : <><span>Total</span><b>La app espera {pesos(esp)}</b></>}
     </div>
