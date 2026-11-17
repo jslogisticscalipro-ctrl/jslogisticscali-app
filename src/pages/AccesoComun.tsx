@@ -62,7 +62,7 @@ export function BotonTema({ oscuro, alCambiar }: { oscuro: boolean; alCambiar: (
   return (
     <button type="button" onClick={alCambiar}
       aria-label={oscuro ? "Activar modo claro" : "Activar modo oscuro"}
-      className="fixed top-4 right-4 z-50 flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-lg shadow-slate-900/5 backdrop-blur-md transition-all hover:border-sky-500/50 active:scale-95 dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-200 dark:shadow-black/30 sm:top-6 sm:right-6">
+      className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-50 flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3.5 py-2 text-xs font-bold text-slate-700 shadow-lg shadow-slate-900/5 backdrop-blur-md transition-all hover:border-sky-500/50 active:scale-95 dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-200 dark:shadow-black/30 sm:top-[calc(1.5rem+env(safe-area-inset-top))] sm:right-[calc(1.5rem+env(safe-area-inset-right))]">
       {oscuro ? <Sun aria-hidden className="size-4 text-amber-400" /> : <Moon aria-hidden className="size-4 text-sky-600" />}
       <span className="hidden sm:inline">{oscuro ? "Modo claro" : "Modo oscuro"}</span>
     </button>
