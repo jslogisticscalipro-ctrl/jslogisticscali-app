@@ -3,15 +3,16 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useLocation } from "react-router";
 import { useSesion } from "./auth/Sesion";
+import { cargaSegura } from "./lib/cargaSegura";
 
 // El ingreso y la app interna van en archivos aparte: quien no ha entrado no baja la app, y quien ya entró no baja el formulario.
-const Ingreso = lazy(() => import("./pages/Ingreso"));
-const Recuperar = lazy(() => import("./pages/Recuperar"));
-const Restablecer = lazy(() => import("./pages/Restablecer"));
+const Ingreso = lazy(() => cargaSegura(() => import("./pages/Ingreso")));
+const Recuperar = lazy(() => cargaSegura(() => import("./pages/Recuperar")));
+const Restablecer = lazy(() => cargaSegura(() => import("./pages/Restablecer")));
 const cargarMarco = () => import("./interna/Marco");
-const AppInterna = lazy(cargarMarco);
+const AppInterna = lazy(() => cargaSegura(cargarMarco));
 // El patinador solo tiene su caja: no baja la app de la oficina ni la de los mensajeros.
-const AppPatinador = lazy(() => import("./interna/patinador/Patinador"));
+const AppPatinador = lazy(() => cargaSegura(() => import("./interna/patinador/Patinador")));
 
 const cargandoVista = <div className="grid min-h-dvh place-items-center text-sm text-slate-500" role="status">Cargando…</div>;
 

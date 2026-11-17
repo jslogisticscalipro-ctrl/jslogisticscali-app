@@ -1,5 +1,6 @@
 /* Carga diferida de pantallas, con precarga. */
 import { createElement, lazy, type ComponentType } from "react";
+import { cargaSegura } from "./cargaSegura";
 
 /**
  * Como `lazy()`, pero si la pantalla ya se precargó la pinta de una vez, sin pasar por el "Cargando…".
@@ -8,7 +9,7 @@ import { createElement, lazy, type ComponentType } from "react";
  */
 export function perezoso<P extends object>(cargar: () => Promise<{ default: ComponentType<P> }>) {
   let modulo: ComponentType<P> | undefined, conLazy = false;
-  const precargar = () => cargar().then(m => { modulo = m.default; return m; });
+  const precargar = () => cargaSegura(cargar).then(m => { modulo = m.default; return m; });
   const Diferido = lazy(precargar);
   function Pantalla(props: P) {
     if (modulo && !conLazy) return createElement(modulo, props);

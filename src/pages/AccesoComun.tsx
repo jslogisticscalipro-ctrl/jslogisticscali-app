@@ -90,7 +90,7 @@ export const BOTON_SECUNDARIO =
 /** Fondo, tarjeta con borde brillante y ancho: el mismo marco del ingreso. Sigue la clase `dark` de <html>. */
 export function MarcoAcceso({ children, intro, controles }: { children: ReactNode; intro?: IntroMarco; controles?: ReactNode }) {
   return (
-    <div ref={intro?.raiz.ref} style={intro?.raiz.style} className={`[--acceso-red:#0284c7] dark:[--acceso-red:#38bdf8] [--acceso-grid:rgba(2,132,199,0.08)] dark:[--acceso-grid:rgba(56,189,248,0.09)] relative isolate grid min-h-dvh place-items-center overflow-hidden bg-slate-50 dark:bg-[#0b0f19] px-4 py-6 sm:py-10 text-slate-700 dark:text-slate-200 transition-colors duration-300`}>
+    <div ref={intro?.raiz.ref} style={intro?.raiz.style} className={`[--acceso-red:#0284c7] dark:[--acceso-red:#38bdf8] [--acceso-grid:rgba(2,132,199,0.08)] dark:[--acceso-grid:rgba(56,189,248,0.09)] relative isolate grid min-h-dvh place-items-center overflow-hidden bg-slate-50 dark:bg-[#0b0f19] px-4 py-6 sm:py-10 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-slate-700 dark:text-slate-200 transition-colors duration-300`}>
       {controles}
       <div aria-hidden style={intro?.fondo} className="pointer-events-none absolute inset-0 -z-10">
         <div
