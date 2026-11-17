@@ -1,5 +1,5 @@
 /* Oficina → Cuentas: cuentas internas (JS Envíos, MT, Base de JS) y pagos, compras y ganancias de clientes, igual al prototipo. */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   S, yo, hoy, hora, pesos, diaDe, listaOrdenada, textoCuenta, yaContado, mueveCaja, esPago, nombreCliente, saldoCliente, sinTildes, cajaOficina, puedoCambiarMedio,
@@ -72,9 +72,13 @@ const reversarPago = (m: Movimiento) => yaContado(m.fecha) ? guardarMovimiento(n
 
 export default function Cuentas({ pintar }: { pintar: () => void }) {
   const v = useVentana();
-  const cs = listaOrdenada(S.cuentas, "nombre");
-  // El resumen de la caja recorre todo: solo se calcula en la sub-pestaña Cuentas, que es la que lo muestra.
-  const R = E.tabCuentas === "cuentas" ? resumenCaja() : null;
+  const { version, pinta } = useDatos();
+  const enCuentas = E.tabCuentas === "cuentas";
+  // El resumen de la caja recorre todo (guías, sueldos, períodos): solo se calcula en la sub-pestaña Cuentas, que es la
+  // que lo muestra, y solo cuando cambian los datos. Cambiar de página o de filtro de la tabla ya no lo recalcula.
+  // `S` se cambia en sitio: lo que avisa del cambio es `version`/`pinta`.
+  const R = useMemo(() => (enCuentas ? resumenCaja() : null), [enCuentas, version, pinta]);
+  const cs = useMemo(() => listaOrdenada(S.cuentas, "nombre").map(cu => ({ cu, t: textoCuenta(cu) })), [version, pinta]);
   const [creando, setCreando] = useState(false);
   const poner = (cambio: Partial<typeof E>) => { Object.assign(E, cambio); pintar(); };
   const semilla = async () => {
@@ -112,7 +116,6 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
 
   // El servidor filtra, cuenta y corta; en demo se imita con los datos en memoria.
   const porPagina = usePorPaginaCuentas();
-  const { version } = useDatos();
   const [buscar, setBuscar] = useState(E.buscarCue);
   const [buscarGan, setBuscarGan] = useState(E.buscarGan);
   const tBuscar = useRef<number>(0), tBuscarGan = useRef<number>(0);
@@ -171,7 +174,7 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
         <div className="cifra"><span>Disponible de JS</span><b className={R.disponible < 0 ? "neg" : ""}>{pesos(R.disponible)}</b><span>Caja − clientes − sueldos</span></div>
       </div>
       <div className="mgrid mgrid-cuentas">
-        {cs.map(cu => { const t = textoCuenta(cu); return <div className="mcard mcard-cuenta" key={cu.id}><div className="mcard-top"><b>{cu.nombre}</b><span className="acciones"><button className="btn ok chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="entra" />, "centrada")}>Entrada</button><button className="btn sec chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="sale" />, "centrada")}>Salida</button></span></div>
+        {cs.map(({ cu, t }) => { return <div className="mcard mcard-cuenta" key={cu.id}><div className="mcard-top"><b>{cu.nombre}</b><span className="acciones"><button className="btn ok chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="entra" />, "centrada")}>Entrada</button><button className="btn sec chico" onClick={() => v.abrir(<MovCuenta id={cu.id} tipo="sale" />, "centrada")}>Salida</button></span></div>
           <span className="sub mcard-cuenta-sub">{TIPOS_CUENTA[cu.tipo] || ""}</span><dl className="datos"><dt>{t.txt}</dt><dd className={t.cls}>{t.val}</dd></dl></div>; })}
       </div>
       {!cs.length ? <div className="vacio">{yo.esAdmin ? <>Todavía no hay cuentas. <button className="btn chico" id="cuSemilla" disabled={creando} onClick={semilla}>Crear JS Envíos, MT y Base de JS</button></> : "El administrador todavía no ha creado las cuentas."}</div> : null}
@@ -264,14 +267,15 @@ export default function Cuentas({ pintar }: { pintar: () => void }) {
 const editar = (v: Ventana, m: Movimiento) => { if (mueveCaja(m) && yaContado(m.fecha)) return avisoContado(v); v.abrir(<MovClienteOficina tipo={m.tipo} mov={m} />, "centrada"); };
 
 function NuevaCuenta() {
-  const v = useVentana(), [nombre, setNombre] = useState(""), [tipo, setTipo] = useState<"socio" | "base">("socio");
-  const guardar = async () => { const n = nombre.trim(); if (!n) return v.avisar("Escribe el nombre");
-    try { await crearCuenta(n, tipo); v.cerrar(); v.avisar("Cuenta creada"); } catch (e) { v.avisar("No se pudo crear: " + motivoError(e)); } };
+  const v = useVentana(), [nombre, setNombre] = useState(""), [tipo, setTipo] = useState<"socio" | "base">("socio"), [guardando, setGuardando] = useState(false);
+  const guardar = async () => { if (guardando) return; const n = nombre.trim(); if (!n) return v.avisar("Escribe el nombre");
+    setGuardando(true);
+    try { await crearCuenta(n, tipo); v.cerrar(); v.avisar("Cuenta creada"); } catch (e) { setGuardando(false); v.avisar("No se pudo crear: " + motivoError(e)); } };
   return <div className="form-modal">
     <Cab><h2>Nueva cuenta</h2></Cab>
     <div className="campo"><label htmlFor="ncNom">Nombre</label><input id="ncNom" placeholder="Ej: JS Envíos" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} /></div>
     <div className="campo"><label htmlFor="ncTipo">Tipo</label><select id="ncTipo" value={tipo} onChange={e => setTipo(e.target.value as "socio" | "base")}>{Object.entries(TIPOS_CUENTA).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
-    <button className="btn form-guardar" id="ncGuardar" onClick={guardar}>Crear cuenta</button>
+    <button className="btn form-guardar" id="ncGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Crear cuenta"}</button>
   </div>;
 }
 
@@ -295,7 +299,7 @@ function MovCuenta({ id, tipo }: { id: string; tipo: "entra" | "sale" }) {
       <div className="campo"><label htmlFor="mcMedio">Medio</label><select id="mcMedio" value={medio} onChange={e => setMedio(e.target.value as Medio)}>{MEDIOS_K.map(k => <option key={k} value={k}>{MEDIOS[k]}</option>)}</select></div></div>
     <div className="linea2"><div className="campo"><label htmlFor="mcDia">Día</label><input id="mcDia" type="date" value={dia} min={diaMinCaja()} max={hoy()} onChange={e => setDia(e.target.value)} /></div>
       <div className="campo"><label htmlFor="mcMot">Motivo</label><input id="mcMot" placeholder={tipo === "entra" ? "Ej: devolución del préstamo" : "Ej: préstamo para nómina"} value={mot} onChange={e => setMot(e.target.value)} /></div></div>
-    <button className="btn form-guardar" id="mcGuardar" disabled={guardando} onClick={guardar}>Registrar {tipo === "entra" ? "entrada" : "salida"}</button>
+    <button className="btn form-guardar" id="mcGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Registrar " + (tipo === "entra" ? "entrada" : "salida")}</button>
   </div>;
 }
 

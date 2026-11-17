@@ -344,7 +344,10 @@ export async function editarCajaMov(k: string, d: Partial<CajaMov>) {
 }
 export async function crearCuenta(nombre: string, tipo: "socio" | "base") {
   if (DEMO) { const k = id(); return tocar(s => { s.cuentas[k] = { id: k, nombre, tipo }; }); }
-  await tras(api.cuentasInternas.crear({ nombre, tipo }));
+  // Se pinta con la cuenta que responde el servidor; en segundo plano se confirma solo la lista de cuentas (antes se volvía a bajar todo).
+  const cu = await api.cuentasInternas.crear({ nombre, tipo });
+  tocar(s => { s.cuentas = { ...s.cuentas, [cu.id]: { id: cu.id, nombre: cu.nombre, tipo: cu.tipo } }; });
+  void recargarSolo(["cuentas"]).catch(() => {});
 }
 /** Liquidar el período de un mensajero. Con la entrega final y el adelanto: el servidor registra el dinero recibido
  *  y el adelanto de sueldo (que no sale de la caja) junto con la liquidación. */
