@@ -256,6 +256,7 @@ export function FormCliente({ id, alGuardar, nombre: nombre0 }: { id?: string; a
   const v = useVentana(), c = id ? S.clientes[id] : undefined;
   const [nombre, setNombre] = useState(c?.nombre || nombre0 || ""), [tel, setTel] = useState(c?.telefono || ""), [tarifa, setTarifa] = useState(String(Number(c?.tarifa) || ""));
   const [aunAsi, setAunAsi] = useState(false), [dups, setDups] = useState<ReturnType<typeof parecidos>>([]);
+  const [guardando, setGuardando] = useState(false);
   const cambio = () => { setAunAsi(false); setDups([]); };
   const exacto = dups.some(x => x.igual);
   const guardar = async () => {
@@ -263,11 +264,13 @@ export function FormCliente({ id, alGuardar, nombre: nombre0 }: { id?: string; a
     if (!n) return v.avisar("Escribe el nombre"); if (!t) return v.avisar("Escribe el número");
     const cambiado = !id || normNom(n) !== normNom(c?.nombre || "") || normTel(t) !== normTel(c?.telefono || ""), ds = cambiado ? parecidos(n, t, id) : [];
     if (ds.length && (!aunAsi || ds.some(x => x.igual))) { setDups(ds); if (!ds.some(x => x.igual)) setAunAsi(true); return; }
+    setGuardando(true);
     try {
       const cid = await guardarCliente(id || null, { nombre: n, telefono: t, tarifa: Number(tarifa) || 0, confirmarRepetido: aunAsi || undefined });
       v.avisar("Cliente " + n + " guardado");
       if (alGuardar) alGuardar(cid); else v.cerrar();
     } catch (e) { v.avisar("No se pudo guardar: " + motivoError(e)); }
+    finally { setGuardando(false); }
   };
   return <>
     <Cab><h2>{id ? "Editar cliente" : "Nuevo cliente"}</h2></Cab>
@@ -278,7 +281,7 @@ export function FormCliente({ id, alGuardar, nombre: nombre0 }: { id?: string; a
       {dups.map(x => <div key={x.c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}><span>{x.c.nombre} · {x.c.telefono || ""}<br /><span className="sub" style={{ fontSize: ".8rem" }}>{x.igual ? "mismo nombre y número" : x.mismoNom ? "mismo nombre" : "mismo número"}</span></span>
         <button className="btn sec chico" onClick={() => (alGuardar ? alGuardar(x.c.id) : abrirCuenta(v, x.c.id))}>Usar este</button></div>)}
       <p className="sub" style={{ margin: "6px 0 0" }}>{exacto ? "No se puede crear otro con el mismo nombre y número." : "Si de verdad es otro cliente, toca otra vez “Guardar de todos modos”."}</p></div> : null}
-    <button className="btn" id="cGuardar" style={{ width: "100%" }} onClick={guardar}>{aunAsi ? "Guardar de todos modos" : "Guardar cliente"}</button>
+    <button className="btn" id="cGuardar" style={{ width: "100%" }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : aunAsi ? "Guardar de todos modos" : "Guardar cliente"}</button>
   </>;
 }
 

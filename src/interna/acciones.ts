@@ -5,7 +5,7 @@
 import * as api from "../api/servicios";
 import type * as T from "../api/tipos";
 import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente, idSinDesc } from "./motor";
-import { aPedido, aPersona, aRec, type Coleccion } from "./datos";
+import { aPedido, aPersona, aRec, aMov, type Coleccion } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
 import { canjearDemo, aNombreDe } from "./traspaso";
@@ -195,13 +195,25 @@ export async function unirClientes(k: string, otros: string[]) {
     for (const u of Object.values(s.usuarios)) if (u.clienteId && otros.includes(u.clienteId)) u.clienteId = k;
     otros.forEach(o => delete s.clientes[o]);
   });
-  await tras(api.clientes.unir(k, otros));
+  await api.clientes.unir(k, otros);
+  // Se pinta ya con el mismo traspaso que hace el servidor; en segundo plano se confirma con lo que quedó guardado.
+  tocar(s => {
+    for (const p of Object.values(s.pedidos)) if (otros.includes(p.clienteId)) p.clienteId = k;
+    for (const m of Object.values(s.movimientos)) if (otros.includes(m.clienteId)) m.clienteId = k;
+    for (const u of Object.values(s.usuarios)) if (u.clienteId && otros.includes(u.clienteId)) u.clienteId = k;
+    otros.forEach(o => delete s.clientes[o]);
+  });
+  void recargarSolo(["pedidos", "clientes", "movimientos", "usuarios"]).catch(() => {});
 }
 export interface DatosMov { clienteId: string; tipo: TipoMov; valor: number; medio: Medio | ""; nota: string; fecha: number }
 export async function guardarMovimiento(mid: string | null, d: DatosMov) {
   if (DEMO) { const k = mid || id(); tocar(s => { s.movimientos[k] = { ...(s.movimientos[k] || { porUid: yo.uid, porNombre: yo.nombre }), id: k, ...d }; }); return; }
   const cuerpo = { ...d, medio: d.medio || null, fecha: iso(d.fecha) };
-  await tras(mid ? api.movimientos.actualizar(mid, cuerpo) : api.movimientos.crear(cuerpo));
+  // Se pinta con lo que responde el servidor (ya no se espera a volver a bajar todo); en segundo plano se refresca
+  // solo lo que este cambio puede tocar: los movimientos y la caja.
+  const m = await (mid ? api.movimientos.actualizar(mid, cuerpo) : api.movimientos.crear(cuerpo));
+  tocar(s => { s.movimientos = { ...s.movimientos, [m.id]: aMov(m) }; });
+  void recargarSolo(["movimientos", "cajamovs"]).catch(() => {});
 }
 export async function borrarDe(col: "movimientos" | "recaudos" | "cajamovs" | "jornadas", k: string) {
   if (!DEMO) {
@@ -209,6 +221,8 @@ export async function borrarDe(col: "movimientos" | "recaudos" | "cajamovs" | "j
     await svc.eliminar(k);
   }
   tocar(s => { delete s[col][k]; });
+  // Un pago ya contado no se borra: el servidor registra el pago contrario. Se confirma en segundo plano.
+  if (!DEMO && col === "movimientos") void recargarSolo(["movimientos", "cajamovs"]).catch(() => {});
 }
 /** "Pagar e imprimir" recibos: el servidor paga el saldo a favor de cada cliente con el saldo de ese momento
  *  (si ya quedó en 0, no se paga dos veces). Devuelve los ids de los pagos, para poder reversarlos. */
@@ -220,13 +234,14 @@ export async function pagarSaldos(clienteIds: string[], medio: Medio): Promise<{
     return { hechos: pagos.map(x => x.k), total: pagos.reduce((a, x) => a + x.v, 0) };
   }
   const r = await api.clientes.pagarSaldos(clienteIds, medio);
-  await recargar();
+  await recargarSolo(["movimientos", "cajamovs"]); // los recibos se imprimen con lo que quedó guardado; solo se baja lo que cambió
   return { hechos: r.hechos, total: r.total };
 }
 /** "Reversar los pagos" recién hechos al imprimir: si no se han contado en un arqueo se borran; si ya, se registra el pago contrario. */
 export async function reversarPagos(ids: string[]) {
   if (DEMO) return tocar(s => { s.movimientos = { ...s.movimientos }; ids.forEach(k => delete s.movimientos[k]); });
-  await tras(api.movimientos.reversar(ids));
+  await api.movimientos.reversar(ids);
+  await recargarSolo(["movimientos", "cajamovs"]);
 }
 /** El asistente puede cambiar el medio de un pago que registró hoy (antes del arqueo). */
 export async function cambiarMedio(col: "movimientos" | "recaudos", k: string, medio: Medio) {
