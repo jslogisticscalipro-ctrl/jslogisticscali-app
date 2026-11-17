@@ -133,6 +133,8 @@ interface Datos {
   tocar: (fn?: (s: Almacen) => void) => void;
   /** Una vista avisa qué colecciones usa: se traen las que falten o estén vencidas. Devuelve la función para soltarlas. */
   usar: (cols: readonly Coleccion[]) => () => void;
+  /** Adelanta la descarga de colecciones sin marcarlas "en uso": no se refrescan solas cada 45 s, solo quedan listas para cuando se abra la pestaña. */
+  precargar: (cols: readonly Coleccion[]) => void;
   /** ¿Están ya en memoria (aunque se estén actualizando)? */
   tiene: (cols: readonly Coleccion[]) => boolean;
 }
@@ -187,6 +189,7 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
     void traer(cols);
     return () => cols.forEach(c => { const n = (enUso.current.get(c) || 1) - 1; if (n > 0) enUso.current.set(c, n); else enUso.current.delete(c); });
   }, [traer]);
+  const precargar = useCallback((cols: readonly Coleccion[]) => { void traer(cols); }, [traer]);
   const tiene = useCallback((cols: readonly Coleccion[]) => DEMO ? demoCargado.current : cols.every(c => cache.cargado(c)), [cache]);
 
   useEffect(() => {
@@ -201,7 +204,7 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   // Sin `fn` es solo volver a pintar (cambió la pestaña o un filtro de `E`): antes eso también volvía a pedir la página.
   const tocar = useCallback((fn?: (s: Almacen) => void) => { if (fn) { fn(S); setVersion(v => v + 1); } else setPinta(v => v + 1); }, []);
   conectar(tocar, recargar);
-  return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, tiene }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, precargar, tiene }}>{children}</Ctx.Provider>;
 }
 
 /** Muestra "Cargando…" hasta que estén las colecciones (para las ventanas que se abren desde otra pestaña). */

@@ -70,7 +70,7 @@ export default function AppInterna() {
 function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boolean; cambiarTema: () => void; colapsado: boolean; alternarMenu: () => void }) {
   useEventos();
   const { usuario, salir } = useSesion();
-  const { version, tocar, error } = useDatos();
+  const { version, tocar, error, precargar } = useDatos();
   const ventana = useVentana();
   const escritorio = useEscritorio();
   const [perfilAbierto, setPerfilAbierto] = useState(false);
@@ -104,7 +104,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
     elegir = k => { if (ADMIN_ESCRITORIO.some(([x]) => x === k)) { E.tabA = "mas"; E.subMas = k; } else E.tabA = k; };
   }
   // Apuntar o tocar un botón del menú ya empieza a bajar esa pestaña (solo en la oficina; el mensajero va en un solo archivo).
-  const intencion = (k: string) => { if (enOficina) precargarPestana(k); };
+  const intencion = (k: string) => { if (enOficina) { precargarPestana(k); precargar(necesarias(E.rol, k)); } };
   const ir = (k: string) => {
     if (k === "pedidos" && enOficina) Object.assign(E, { filtroA: estadoInicialPedidos(), buscarA: "", mensPedA: "", diaPedA: "", paginaA: 1 });
     elegir(k); pintar(); scrollTo(0, 0);
@@ -152,6 +152,15 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
     const id = setTimeout(precargarAvisos, 3000);
     return () => clearTimeout(id);
   }, []);
+  // Caja, Cuentas, Sueldos y Más piden todas las colecciones (todas las guías incluidas) y por eso tardaban en abrir:
+  // cuando el navegador queda libre se adelanta esa descarga para que la pestaña ya esté lista al tocarla.
+  useEffect(() => {
+    if (!enOficina) return;
+    const ir = () => precargar(necesarias(E.rol, "caja"));
+    if ("requestIdleCallback" in window) { const id = requestIdleCallback(ir, { timeout: 4000 }); return () => cancelIdleCallback(id); }
+    const id = setTimeout(ir, 2500);
+    return () => clearTimeout(id);
+  }, [enOficina, precargar]);
   void version;
 
   return <>
@@ -205,7 +214,7 @@ function Marco({ oscuro, cambiarTema, colapsado, alternarMenu }: { oscuro: boole
     </main>
     <nav className="pestanas" id="pestanas" aria-label="Secciones">
       {vis.map(boton)}
-      {resto.length > 0 && <button aria-current={enResto ? "page" : undefined} aria-label={enResto ? "Más secciones (estás en " + enResto[1] + ")" : "Más secciones"} onClick={abrirMenu}><Icono n="menu" /><span className="t">Más</span>{nResto ? <span className="num">{nResto}</span> : null}</button>}
+      {resto.length > 0 && <button aria-current={enResto ? "page" : undefined} aria-label={enResto ? "Más secciones (estás en " + enResto[1] + ")" : "Más secciones"} onClick={abrirMenu} onTouchStart={() => resto.forEach(([k]) => intencion(k))} onPointerEnter={() => resto.forEach(([k]) => intencion(k))}><Icono n="menu" /><span className="t">Más</span>{nResto ? <span className="num">{nResto}</span> : null}</button>}
     </nav>
     {!enMensajero && <AvisoSolicitud solicitudes={solicitudesAbiertas.data?.solicitudes} />}
   </>;
