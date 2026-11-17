@@ -271,7 +271,9 @@ function Paso({ n, titulo, ok, detalle, boton }: { n: number; titulo: string; ok
 }
 
 function CierreDia({ pintar }: { pintar: () => void }) {
-  const v = useVentana(), x = pendientesCierre(), pats = (usePatinadores().data ?? []).filter(p => p.debe > 0).sort((a, b) => b.debe - a.debe);
+  const v = useVentana(), { version, pinta } = useDatos(), dia = hoy();
+  // Estos cálculos recorren todos los datos: se hacen una vez por cambio de datos, no en cada render (abrir una ventana, cambiar un día…).
+  const x = useMemo(() => pendientesCierre(), [version, pinta, dia]), pats = (usePatinadores().data ?? []).filter(p => p.debe > 0).sort((a, b) => b.debe - a.debe);
   const listo = !x.mens.length && !pats.length && !x.ofis.length && !x.sinRem.length && !x.sinServ.length;
   const aPedidos = (f: "sin" | "serv") => {
     E.tabA = "pedidos"; E.filtroA = f; E.buscarA = ""; E.mensPedA = ""; E.diaPedA = ""; E.paginaA = 1; pintar(); scrollTo(0, 0);
@@ -317,10 +319,11 @@ function CierreDia({ pintar }: { pintar: () => void }) {
 
 /* ---------- Caja general (solo administración) ---------- */
 function CajaGeneral({ pintar }: { pintar: () => void }) {
-  const v = useVentana(), R = resumenCaja(), enPatinadores = (usePatinadores().data ?? []).reduce((a, p) => a + Math.max(0, p.debe), 0);
+  const v = useVentana(), { version, pinta } = useDatos(), dia = hoy();
+  const R = useMemo(() => resumenCaja(), [version, pinta, dia]), arqueos = useMemo(() => arqueosCaja(), [version, pinta]), enPatinadores = (usePatinadores().data ?? []).reduce((a, p) => a + Math.max(0, p.debe), 0);
   const delDia = R.L.filter(x => diaDe(x.fecha) === E.diaLibro);
   const ent = delDia.filter(x => x.valor > 0).reduce((a, x) => a + x.valor, 0), sal = delDia.filter(x => x.valor < 0).reduce((a, x) => a - x.valor, 0);
-  const a0 = arqueosCaja()[0], mes = hoy().slice(0, 7), A = arqueosCaja().filter(a => diaDe(a.fecha).startsWith(mes));
+  const a0 = arqueos[0], mes = dia.slice(0, 7), A = arqueos.filter(a => diaDe(a.fecha).startsWith(mes));
   // solo cuenta lo que faltó o sobró en total; el reacomodo entre medios no es pérdida ni ganancia
   const falto = A.reduce((x, a) => x + Math.min(0, netoArqueo(a)), 0), sobro = A.reduce((x, a) => x + Math.max(0, netoArqueo(a)), 0);
   const quitar = async (ref: string) => {
@@ -728,7 +731,7 @@ export function VerLiquidacion({ id }: { id: string }) {
 
 /* ---------- Cajas de oficina: la plata que maneja cada asistente ---------- */
 function TarjetaCajaOficina({ u, dia }: { u: Pick<UsuarioS, "uid" | "nombre" | "email">; dia: string }) {
-  const v = useVentana(), C = cajaOficina(u.uid), hasta = sumaMedios(C.L.filter(x => diaDe(x.fecha) <= dia)), delDia = C.L.filter(x => diaDe(x.fecha) === dia), ahora = dia === hoy();
+  const v = useVentana(), { version, pinta } = useDatos(), C = useMemo(() => cajaOficina(u.uid), [u.uid, version, pinta]), hasta = sumaMedios(C.L.filter(x => diaDe(x.fecha) <= dia)), delDia = C.L.filter(x => diaDe(x.fecha) === dia), ahora = dia === hoy();
   const quitar = async (ref: string) => {
     if (yaContado(S.cajamovs[ref]?.fecha)) return avisoContado(v);
     if (!await v.confirmar("Quitar movimiento de la caja de oficina", "Se quita la base o el cierre registrado.", "Quitar")) return;
@@ -756,7 +759,7 @@ function BloqueCajaOficina() {
 }
 /** Dar base a un asistente o recibir su cierre. Al cierre, lo que pasa de lo que debía tener en efectivo es sobrante; en Nequi y Bancolombia se deja en $ 0. */
 function MovOficina({ auid, tipo }: { auid: string; tipo: "base" | "entrega" }) {
-  const v = useVentana(), u = S.usuarios[auid], C = cajaOficina(auid), base = tipo === "base";
+  const v = useVentana(), { version, pinta } = useDatos(), u = S.usuarios[auid], C = useMemo(() => cajaOficina(auid), [auid, version, pinta]), base = tipo === "base";
   const [vals, setVals] = useState<Record<Medio, string>>({ efectivo: base ? "" : C.saldo.efectivo > 0 ? String(C.saldo.efectivo) : "", nequi: !base && C.saldo.nequi > 0 ? String(C.saldo.nequi) : "", bancolombia: !base && C.saldo.bancolombia > 0 ? String(C.saldo.bancolombia) : "" });
   const [nota, setNota] = useState(""), [guardando, setGuardando] = useState(false);
   const medios: Medio[] = base ? ["efectivo"] : MEDIOS_K;
@@ -790,7 +793,7 @@ function MovOficina({ auid, tipo }: { auid: string; tipo: "base" | "entrega" }) 
 }
 /** Base para vueltos que el asistente le da a un mensajero desde su caja de oficina (en efectivo, con la hora del momento). */
 function BaseDesdeOficina({ mid: mid0 }: { mid?: string }) {
-  const v = useVentana(), elegir = !mid0, ms = listaOrdenada(S.mensajeros, "nombre").filter(x => esRepartidor(x) && tipoDe(x) === "mensajero"), C = cajaOficina(yo.uid);
+  const v = useVentana(), elegir = !mid0, ms = listaOrdenada(S.mensajeros, "nombre").filter(x => esRepartidor(x) && tipoDe(x) === "mensajero"), { version, pinta } = useDatos(), C = useMemo(() => cajaOficina(yo.uid), [version, pinta]);
   const [mid, setMid] = useState(mid0 || ""), [val, setVal] = useState(""), [nota, setNota] = useState(""), [guardando, setGuardando] = useState(false);
   if (!elegir && !S.mensajeros[mid0!]) return null;
   const guardar = async () => {
