@@ -239,6 +239,8 @@ export const movimientos = {
 export const recaudos = coleccion<Recaudo, Sin<Recaudo>>("/recaudos", "recaudos", "recaudo");
 export const liquidaciones = {
   ...coleccion<Liquidacion, Partial<Liquidacion>>("/liquidaciones", "liquidaciones", "liquidacion"),
+  /** Liquidar y cerrar el período: responde con todo lo que guardó (la liquidación, la entrega final y el adelanto) para pintarlo sin recargar. */
+  cerrar: (d: Partial<Liquidacion>) => datos<{ liquidacion: Liquidacion; recaudo: Recaudo | null; movAdelanto: CajaMovimiento | null }>(api.post("/liquidaciones", d)),
   /** Cierres recientes filtrados y paginados: 5 en celular y 9 en computador. */
   pagina: (f: { dia?: string; estado?: string; buscar?: string }, pagina: number, porPagina: number) =>
     opcional(datos<PaginaLiquidaciones>(api.get("/liquidaciones/pagina", { params: { ...f, pagina, porPagina } })), { liquidaciones: [], pagina: 1, porPagina, total: 0, paginas: 1 })

@@ -5,7 +5,7 @@
 import * as api from "../api/servicios";
 import type * as T from "../api/tipos";
 import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente, idSinDesc } from "./motor";
-import { aPedido, aPersona, aRec, aMov, type Coleccion } from "./datos";
+import { aPedido, aPersona, aRec, aMov, aLiq, aCaja, type Coleccion } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
 import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
 import { canjearDemo, aNombreDe } from "./traspaso";
@@ -246,14 +246,22 @@ export async function reversarPagos(ids: string[]) {
 /** El asistente puede cambiar el medio de un pago que registró hoy (antes del arqueo). */
 export async function cambiarMedio(col: "movimientos" | "recaudos", k: string, medio: Medio) {
   if (DEMO) return tocar(s => { const x = s[col][k]; if (x) Object.assign(x, { medioAntes: x.medioAntes || x.medio, medio }); });
-  await tras(col === "movimientos" ? api.movimientos.actualizar(k, { medio }) : api.recaudos.actualizar(k, { medio }));
+  // Se pinta con lo que responde el servidor y se confirma en segundo plano.
+  if (col === "recaudos") { const r = await api.recaudos.actualizar(k, { medio }); tocar(s => { s.recaudos[r.id] = aRec(r); }); }
+  else { const m = await api.movimientos.actualizar(k, { medio }); tocar(s => { s.movimientos[m.id] = aMov(m); }); }
+  void recargarSolo([col]).catch(() => {});
 }
 
 /* ---------- caja ---------- */
 export async function recibirDinero(d: { mensajeroId: string; valor: number; medio: Medio; nota: string; fecha?: number }, editar?: string) {
   if (DEMO) { const k = editar || id(); tocar(s => { s.recaudos[k] = { ...(s.recaudos[k] || { porUid: yo.uid, porNombre: yo.nombre, fecha: Date.now() }), id: k, ...d, ...(d.fecha ? { fecha: d.fecha } : {}) }; }); return; }
   const cuerpo = { ...d, fecha: d.fecha ? iso(d.fecha) : undefined };
-  if (editar) { await tras(api.recaudos.actualizar(editar, cuerpo)); return; }
+  if (editar) {
+    const r = await api.recaudos.actualizar(editar, cuerpo);
+    tocar(s => { s.recaudos[r.id] = aRec(r); });
+    void recargarSolo(["recaudos"]).catch(() => {});
+    return;
+  }
   // Entrega nueva: se pinta en cuanto responde el servidor (ya no se espera a volver a bajar todos los datos) y,
   // en segundo plano, solo se refrescan los recaudos para confirmar con lo que quedó guardado.
   const r = await api.recaudos.crear(cuerpo);
@@ -324,7 +332,11 @@ export async function historialDe(mensajeroId: string, pagina: number, porPagina
 }
 export async function movCaja(d: Omit<CajaMov, "id">) {
   if (DEMO) { const k = id(); tocar(s => { s.cajamovs[k] = { porUid: yo.uid, porNombre: yo.nombre, ...d, id: k }; }); return; }
-  await tras(api.cajaMovimientos.crear({ ...d, fecha: iso(d.fecha) } as Partial<T.CajaMovimiento>));
+  const c = await api.cajaMovimientos.crear({ ...d, fecha: iso(d.fecha) } as Partial<T.CajaMovimiento>);
+  // Una devolución de adelanto también cambia el adelanto que devuelve: ahí se espera a bajar la caja (solo ella).
+  if (d.cat === "devolucion" || !c?.id) { await recargarSolo(["cajamovs"]); return; }
+  tocar(s => { s.cajamovs[c.id] = aCaja(c); });
+  void recargarSolo(["cajamovs"]).catch(() => {});
 }
 export async function editarCajaMov(k: string, d: Partial<CajaMov>) {
   if (DEMO) return tocar(s => { Object.assign(s.cajamovs[k], d); });
@@ -348,14 +360,22 @@ export async function liquidar(l: DatosLiq): Promise<string> {
     });
     return k;
   }
-  const r = await api.liquidaciones.crear({ ...liq, desde: liq.desde ? iso(liq.desde) : null, medio, semanaAdelanto } as Partial<T.Liquidacion>);
-  await recargar(); return r.id;
+  const r = await api.liquidaciones.cerrar({ ...liq, desde: liq.desde ? iso(liq.desde) : null, medio, semanaAdelanto } as Partial<T.Liquidacion>);
+  // Se pinta con lo que respondió el servidor (la liquidación, la entrega final y el adelanto) y ya no se espera a volver
+  // a bajar todos los datos; en segundo plano se refrescan solo esas tres colecciones.
+  tocar(s => {
+    s.liquidaciones[r.liquidacion.id] = aLiq(r.liquidacion);
+    if (r.recaudo) s.recaudos[r.recaudo.id] = aRec(r.recaudo);
+    if (r.movAdelanto) s.cajamovs[r.movAdelanto.id] = aCaja(r.movAdelanto);
+  });
+  void recargarSolo(["liquidaciones", "recaudos", "cajamovs"]).catch(() => {});
+  return r.liquidacion.id;
 }
 /** Reabrir la última liquidación: se borra, sus entregas vuelven al período actual y se quita el adelanto que salió de ella. */
 export async function reabrirLiquidacion(k: string) {
   if (!DEMO) await api.liquidaciones.eliminar(k);
   tocar(s => { for (const c of Object.values(s.cajamovs)) if (c.deLiquidacion === k) delete s.cajamovs[c.id]; delete s.liquidaciones[k]; });
-  if (!DEMO) await recargar();
+  if (!DEMO) void recargarSolo(["liquidaciones", "cajamovs"]).catch(() => {}); // ya se quitó en pantalla; se confirma en segundo plano
 }
 export async function arqueo(esperado: Record<string, number>, contado: Record<string, number>, nota: string) {
   if (DEMO) {

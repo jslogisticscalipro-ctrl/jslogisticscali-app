@@ -656,7 +656,7 @@ function Liquidar({ mid }: { mid: string }) {
     </div>
     <footer className="lq-pie">
       <div className={"liq-resultado " + clase} id="lRes"><span className="lq-res-t">Resultado del cierre</span><b>{resultado}</b></div>
-      <button className="btn ok" id="lGuardar" disabled={guardando} onClick={guardar}>Liquidar y cerrar período</button>
+      <button className="btn ok" id="lGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Liquidando…" : "Liquidar y cerrar período"}</button>
     </footer>
   </div>;
 }
