@@ -983,7 +983,7 @@
 /* La cabecera móvil conserva el logo, la campana y el perfil incluso a 320 px. */
 @media (max-width:359px){.jsl .barra{padding-inline:10px}}
 
-/* Nueva guía del mensajero: foto subiendo y remitente opcional (mensajero/NuevaGuia.tsx). */
+/* Nueva guía del mensajero: foto lista para crear (mensajero/NuevaGuia.tsx). Las clases ng-elegido, ng-lista y ng-ayuda también las usa oficina/BuscadorRemitente.tsx. */
 .jsl .ng-subida{display:flex;gap:14px;align-items:center;padding:12px;border:1px solid var(--linea);border-radius:14px;background:var(--hueco)}
 .jsl .ng-foto{position:relative;flex:0 0 auto;width:84px;height:84px;border-radius:12px;overflow:hidden;background:var(--linea)}
 .jsl .ng-foto img{width:100%;height:100%;object-fit:cover;display:block}
@@ -994,9 +994,6 @@
 .jsl .ng-texto{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
 .jsl .ng-texto .sub{font-size:.85rem}
 .jsl .ng-fase-error .ng-texto b{color:var(--rojo)}
-.jsl .ng-remitente{margin-top:16px}
-.jsl .ng-remitente .campo{margin:0}
-.jsl .ng-remitente input[type=search]{min-height:48px;font-size:1rem}
 .jsl .ng-lista{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .jsl .ng-lista:empty{display:none}
 .jsl .ng-lista button{width:100%;min-height:48px;padding:10px 14px;text-align:left;border:1px solid var(--linea);border-radius:12px;background:var(--papel);color:var(--tinta);font:inherit;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
