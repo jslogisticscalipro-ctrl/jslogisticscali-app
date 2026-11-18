@@ -182,52 +182,10 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
     {pag && (E.diaPedA || E.mensPedA) ? <p className="sub">{total} {pl(total, "pedido")}{E.mensPedA ? " de " + (S.mensajeros[E.mensPedA]?.nombre || "") : ""}{E.diaPedA ? " que salieron o se cerraron ese día" : ""}</p> : null}
     {q.isError ? <div className="aviso alerta">No se pudo traer la lista: {motivoError(q.error)} <button className="btn chico" onClick={() => q.refetch()}>Intentar otra vez</button></div>
       : !pag ? <div className="vacio">Cargando pedidos…</div>
-      : ps.length ? <><div className="lista" aria-busy={q.isFetching} style={q.isPlaceholderData ? { opacity: .6 } : undefined}>{ps.map(p => <FilaPedido key={p.guia} p={p} onClick={() => v.abrir(p.clienteId ? <AbrirPedido guia={p.guia} /> : <AsignarRemitente guia={p.guia} />, "drawer")} />)}</div>
+      : ps.length ? <><div className="lista" aria-busy={q.isFetching} style={q.isPlaceholderData ? { opacity: .6 } : undefined}>{ps.map(p => <FilaPedido key={p.guia} p={p} onClick={() => v.abrir(<AbrirPedido guia={p.guia} />, "drawer")} />)}</div>
       <Paginador pagina={pag.pagina} paginas={pag.paginas} total={total} porPagina={pag.porPagina} ir={irA} cargando={q.isPlaceholderData} /></>
       : <div className="vacio">{f === "sin" ? "Todos los pedidos tienen remitente asignado." : f === "serv" ? "Todos los pedidos entregados tienen valor de servicio." : "No hay pedidos aquí."}</div>}
   </>;
-}
-
-/** Ventana ligera para ponerle remitente a una guía que no lo tiene. No espera la descarga de todas las guías, la caja ni las
-    liquidaciones (como sí hace `AbrirPedido`): solo necesita esta guía y buscar clientes en el servidor. El servidor valida todo
-    (que el cliente exista y que no sea algo ya contado en un arqueo). El resto de la guía se edita en "Ver el detalle completo". */
-export function AsignarRemitente({ guia, cliElegido }: { guia: string; cliElegido?: string }) {
-  const v = useVentana(), enMemoria = S.pedidos[guia];
-  const q = useQuery({ queryKey: ["pedidos", "detalle", guia], queryFn: async () => aPedido(await apiPedidos.obtener(guia)), enabled: !enMemoria && !DEMO, staleTime: 0, gcTime: 0 });
-  const p = enMemoria ?? q.data;
-  const [buscado, setBuscado] = useState(""), [cli, setCli] = useState(cliElegido || ""), [cliNombre, setCliNombre] = useState(cliElegido ? nombreCliente(cliElegido) : "");
-  const [serv, setServ] = useState(""), [cob, setCob] = useState(""), [listoForm, setListoForm] = useState(false), [guardando, setGuardando] = useState(false);
-  // Los valores de la guía se cargan una sola vez, cuando ya se tiene la guía; el valor del servicio sale de la tarifa del cliente elegido.
-  useEffect(() => {
-    if (!p || listoForm) return;
-    setListoForm(true);
-    setServ(String(Number(p.valorServicio) || (cliElegido ? Number(S.clientes[cliElegido]?.tarifa) : 0) || "")); setCob(String(Number(p.aCobrar) || ""));
-  }, [p, listoForm, cliElegido]);
-  if (!p) return <><Cab><h2 className="guia">{guia}</h2></Cab>{q.isError ? <p className="sub">No se pudo abrir la guía. Cierra y vuelve a intentarlo.</p> : <div className="vacio" role="status">Cargando…</div>}</>;
-
-  const elegir = (c: { id: string; nombre: string; tarifa: number }) => { setCli(c.id); setCliNombre(c.nombre); if (c.tarifa && !Number(serv)) setServ(String(c.tarifa)); };
-  const guardar = async () => {
-    if (guardando) return;
-    if (!cli) return v.avisar("Elige el remitente");
-    setGuardando(true);
-    try { await actualizarPedido(guia, { clienteId: cli, valorServicio: Number(serv) || 0, aCobrar: Number(cob) || 0 }); v.cerrar(); v.avisar("Guía " + guia + " a nombre de " + cliNombre); }
-    catch (e) { setGuardando(false); v.avisar("No se pudo guardar: " + motivoError(e)); }
-  };
-  return <div className="pedido-drawer">
-    <div className="pedido-drawer-cab"><Cab sub={<EtqEstado p={p} />}><h2 className="guia">{guia}</h2></Cab></div>
-    <div className="pedido-drawer-cuerpo">
-      <p className="sub">Sin remitente · {S.mensajeros[p.mensajeroId]?.nombre || "—"} · {hora(p.creado)}{p.destinatario ? " · " + p.destinatario : ""}</p>
-      <FotosGuia p={p} id="pFotos" soloSalida />
-      <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegir} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setBuscado}
-        extra={<button className="btn sec chico" id="pNuevoCli" type="button" style={{ alignSelf: "start", marginTop: 6 }} onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AsignarRemitente guia={guia} cliElegido={cid} />, "drawer")} nombre={buscado} />, "centrada")}>+ Crear cliente nuevo</button>} />
-      <div className="linea2">
-        <div className="campo"><label htmlFor="pServ">Valor del servicio</label><input id="pServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} /></div>
-        <div className="campo"><label htmlFor="pCob">Valor a cobrar</label><input id="pCob" type="number" inputMode="numeric" min="0" step="100" value={cob} onChange={e => setCob(e.target.value)} placeholder="Lo que el mensajero debe recoger" /></div>
-      </div>
-      <button className="btn" id="pGuardar" disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar remitente"}</button>
-      <button className="btn sec chico" id="pDetalleCompleto" type="button" style={{ marginTop: 10 }} onClick={() => v.abrir(<AbrirPedido guia={guia} />, "drawer")}>Ver el detalle completo</button>
-    </div>
-  </div>;
 }
 
 /** Detalle de una guía para la oficina (abrirPedido del prototipo). */
