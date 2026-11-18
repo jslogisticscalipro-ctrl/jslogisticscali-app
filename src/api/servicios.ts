@@ -39,8 +39,6 @@ export interface FiltrosPedidos {
   /** "todas" incluye las diferencias ya revisadas. */
   diferencia?: "todas" | "sinRevisar";
   sinRemitente?: boolean;
-  /** Por entregar, sin foto de salida y con más de 10 minutos (no los reintentos). */
-  sinFoto?: boolean;
   cambioPendiente?: boolean;
   sinServicio?: boolean;
   /** AAAA-MM-DD: salió, se entregó o se devolvió ese día (hora de Colombia). */

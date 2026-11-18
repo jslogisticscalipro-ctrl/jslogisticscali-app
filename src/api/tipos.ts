@@ -119,8 +119,6 @@ export interface Pedido {
   solicitud?: SolicitudDePedido | null;
   intentos: Intento[];
   mini: string | null;
-  /** No tiene foto de salida (la foto no subió, o es un reintento, que se crea sin foto). */
-  sinFoto?: boolean;
 }
 
 /** Una página del paginador de pedidos (GET /pedidos?pagina=&porPagina=). */

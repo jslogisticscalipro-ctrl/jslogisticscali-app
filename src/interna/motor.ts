@@ -34,8 +34,6 @@ export interface Pedido {
   gasto: number; gastoNota: string;
   domiPagado: boolean; domiPagoMedio: Medio | ""; domiPagoValor: number | null; domiPagoFecha: number; domiPagoUid: string;
   intentos: Intento[]; mini: string;
-  /** No tiene foto de salida (lo dice el servidor). */
-  sinFoto?: boolean;
   /** Dónde recoger y a quién entregar, si la guía salió de una solicitud. */
   solicitud?: SolicitudDePedido | null;
 }

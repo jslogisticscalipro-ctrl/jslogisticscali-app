@@ -75,9 +75,6 @@ export function datosDemo(u: Usuario): Almacen {
   // Devueltos recientes del primer mensajero: uno por confirmar y uno que ya está en la oficina (esperando reintento).
   Object.values(S.pedidos).filter(p => p.estado === "devuelto" && p.mensajeroId === "m1").sort((a, b) => (b.entregado || 0) - (a.entregado || 0)).slice(0, 2)
     .forEach((p, i) => { p.destinoDev = i === 0 ? "por_definir" : "oficina"; });
-  // Una guía por entregar cuya foto no subió (app vieja: la guía se creaba antes que la foto): sale en «Sin foto».
-  const sinFoto = Object.values(S.pedidos).filter(p => p.estado === "pendiente" && !p.reintentoDe && p.creado < ahora - 6e5).sort((a, b) => b.n - a.n)[0];
-  if (sinFoto) Object.assign(sinFoto, { sinFoto: true, clienteId: "", clienteNombre: "" });
   // Movimientos de clientes: pagos que hicieron y pagos que les hizo JS
   let m = 1; const nuevo = (pre: string) => pre + (m++);
   for (let d = 30; d >= 0; d -= 1) {
