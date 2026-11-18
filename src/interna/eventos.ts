@@ -6,7 +6,7 @@ import { BASE } from "../api/cliente";
 import { DEMO } from "./demo";
 
 /** `alCambiar`: llegó un aviso con las colecciones que cambiaron. `alCanal`: el canal en tiempo real se conectó (true) o se cayó (false). */
-export interface AvisosEventos { alCambiar?: (cols: string[]) => void; alCanal?: (vivo: boolean) => void }
+export interface AvisosEventos { alCambiar?: (cols: string[], pedidosQuitados?: string[]) => void; alCanal?: (vivo: boolean) => void }
 
 export function useEventos(avisos?: AvisosEventos) {
   const qc = useQueryClient();
@@ -17,8 +17,8 @@ export function useEventos(avisos?: AvisosEventos) {
     const es = new EventSource(`${BASE}/eventos`, { withCredentials: true });
     const alCambiar = (e: MessageEvent) => {
       try {
-        const d = JSON.parse(e.data) as { cols?: string[] };
-        if (d?.cols?.length) aviso.current?.alCambiar?.(d.cols);
+        const d = JSON.parse(e.data) as { cols?: string[]; pedidosQuitados?: string[] };
+        if (d?.cols?.length) aviso.current?.alCambiar?.(d.cols, d.pedidosQuitados);
         if (d?.cols?.includes("solicitudes")) qc.invalidateQueries({ queryKey: ["solicitudes"] }, { cancelRefetch: false }); // si ya hay un refresco en curso (por la acción de esta pantalla), no se repite
         if (d?.cols?.includes("recaudos") || d?.cols?.includes("caja_patinador")) qc.invalidateQueries({ queryKey: ["patinador"] }); // el resumen de patinadores (Caja) se arma con sus pagos y con lo que ya entregaron
         // Las cifras de Cuentas → Cuentas vienen del servidor y cruzan casi todo (guías, pagos, caja, sueldos): cualquier cambio
