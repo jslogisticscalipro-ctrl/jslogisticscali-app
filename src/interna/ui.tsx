@@ -123,6 +123,17 @@ export const Cab = ({ children, sub }: { children: ReactNode; sub?: ReactNode })
   <header>{sub !== undefined ? <div>{children}{sub}</div> : children}<button className="cerrar" data-cerrar aria-label="Cerrar">×</button></header>
 );
 
+/** Hoja del detalle de una guía mientras llegan el código o los datos: ya tiene la forma final (hoja inferior en celular,
+    modal centrado en escritorio), así la ventana no pasa por el panel vacío del borde izquierdo. Con `error` avisa y deja cerrar. */
+export const EsqueletoPedido = ({ error }: { error?: string }) => (
+  <div className="pedido-drawer" aria-busy={!error} role="status">
+    <div className="pedido-drawer-cab"><header><div><span className="esq esq-t" /></div><button className="cerrar" data-cerrar aria-label="Cerrar">×</button></header></div>
+    <div className="pedido-drawer-cuerpo">{error
+      ? <p className="vacio">{error}</p>
+      : <div className="pedido-detalle-grid"><div className="pedido-detalle-panel"><span className="esq esq-l" /><span className="esq esq-c" /><span className="esq esq-c" /><span className="esq esq-c" /></div><div className="pedido-detalle-panel"><span className="esq esq-l" /><span className="esq esq-c" /><span className="esq esq-c" /></div></div>}</div>
+  </div>
+);
+
 /* ---------- etiquetas y filas ---------- */
 const pl = (n: number, uno: string, varios = uno + "s") => (n === 1 ? uno : varios);
 export { pl };

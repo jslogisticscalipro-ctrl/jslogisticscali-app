@@ -5,7 +5,7 @@ import {
   S, yo, hora, pesos, listaOrdenada, esRepartidor, tipoDe, cambioPendiente, sinServicio, delDia, nombreCliente, cerrado, gastoDe, pagoDomi,
   saldoPedido, metodoTxt, pedidoLiquidado, cambiaLoContado, CUENTAS_JS, METODOS, MEDIOS, MOTIVOS, type Metodo, type Medio, type Motivo, type Pedido,
 } from "../motor";
-import { Cab, EtqEstado, FiltroDia, FilaPedido, FotosGuia, IconoCamara, IconoFiltro, IconoInfo, Paginador, pl, useVentana } from "../ui";
+import { Cab, EsqueletoPedido, EtqEstado, FiltroDia, FilaPedido, FotosGuia, IconoCamara, IconoFiltro, IconoInfo, Paginador, pl, useVentana } from "../ui";
 import { E } from "../estado";
 import { actualizarPedido, cambioEntregado, crearGuias, enBloque, eliminarPedido, reabrir } from "../acciones";
 import { aPedido, motivoError, useDatos } from "../datos";
@@ -188,8 +188,17 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   </>;
 }
 
-/** Detalle de una guía para la oficina (abrirPedido del prototipo). */
-export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: string }) {
+/** Detalle de una guía para la oficina. Una guía que llegó hace poco ya sale en la lista (que viene del servidor) pero puede no estar
+    todavía en la memoria de la pantalla (esa se recarga completa cada tanto): en ese caso se pide solo esa guía, sin esperar. */
+export function AbrirPedido(props: { guia: string; cliElegido?: string }) {
+  const d = useDatos(), { guia } = props, falta = !S.pedidos[guia];
+  const q = useQuery({ queryKey: ["pedido", guia, "detalle"], queryFn: () => apiPedidos.obtener(guia), enabled: falta, retry: 1, staleTime: 0 });
+  useEffect(() => { if (falta && q.data) d.tocar(s => { if (!s.pedidos[guia]) s.pedidos[guia] = aPedido(q.data); }); }, [falta, q.data, guia, d]);
+  if (!falta) return <DetalleGuia {...props} />;
+  return <EsqueletoPedido error={q.isError ? "No se pudo abrir la guía " + guia + ". Revisa tu conexión y vuelve a intentarlo." : undefined} />;
+}
+
+function DetalleGuia({ guia, cliElegido }: { guia: string; cliElegido?: string }) {
   useDatos();
   const v = useVentana(), p0 = S.pedidos[guia];
   const [q, setQ] = useState(""), [cli, setCli] = useState(cliElegido || p0?.clienteId || "");

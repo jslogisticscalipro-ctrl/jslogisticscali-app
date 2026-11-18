@@ -2,19 +2,21 @@
    Se cargan al abrirlas: así entrar al Panel no baja el código de Pedidos, Clientes y Caja. La ventana (ui.tsx) muestra
    "Cargando…" mientras llega el archivo, y si la pestaña dueña ya se abrió, sale de una vez. Cada una pide además las
    colecciones de su pestaña (datos.tsx), por si se abre desde una que no las tenía cargadas. */
-import type { ComponentProps, ComponentType } from "react";
+import { Suspense, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { perezoso } from "../../lib/perezoso";
+import { EsqueletoPedido } from "../ui";
 import { ConColecciones, necesarias, type Coleccion } from "../datos";
 import type * as P from "./Pedidos";
 import type * as C from "./Clientes";
 import type * as K from "./Caja";
 
-function ventana<X extends object>(pestana: string, Comp: ComponentType<X>, colecciones?: readonly Coleccion[]) {
+function ventana<X extends object>(pestana: string, Comp: ComponentType<X>, colecciones?: readonly Coleccion[], esqueleto?: ReactNode) {
   const cols = colecciones ?? necesarias("admin", pestana);
-  return (props: X) => <ConColecciones cols={cols}><Comp {...props} /></ConColecciones>;
+  // Con `esqueleto`, la espera (colecciones y archivo de código) se ve con la forma final de la ventana, no como "Cargando…".
+  return (props: X) => <ConColecciones cols={cols} esperando={esqueleto}>{esqueleto ? <Suspense fallback={esqueleto}><Comp {...props} /></Suspense> : <Comp {...props} />}</ConColecciones>;
 }
 
-export const AbrirPedido = ventana("pedidos", perezoso<ComponentProps<typeof P.AbrirPedido>>(() => import("./Pedidos").then(m => ({ default: m.AbrirPedido }))));
+export const AbrirPedido = ventana("pedidos", perezoso<ComponentProps<typeof P.AbrirPedido>>(() => import("./Pedidos").then(m => ({ default: m.AbrirPedido }))), undefined, <EsqueletoPedido />);
 export const EnBloque = ventana("pedidos", perezoso<ComponentProps<typeof P.EnBloque>>(() => import("./Pedidos").then(m => ({ default: m.EnBloque }))));
 export const AbrirCuenta = ventana("clientes", perezoso<ComponentProps<typeof C.AbrirCuenta>>(() => import("./Clientes").then(m => ({ default: m.AbrirCuenta }))));
 /** Solo usa la lista de clientes (para avisar de parecidos): no espera guías, movimientos, caja, usuarios ni recaudos. */

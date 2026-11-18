@@ -244,7 +244,30 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   // Un aviso dice qué colecciones cambiaron (los nombres de las tablas; "meta" es la hora del último arqueo). Se juntan unos
   // segundos y se piden solo las que están en uso. Si la colección ya se pidió DESPUÉS del aviso (por ejemplo la recarga que
   // hace esta misma pantalla al guardar), esa petición ya trae el cambio y no se repite.
+  /** Una guía nueva o editada aparece en la memoria de una vez: se piden solo las más recientes y se mezclan, sin esperar la recarga
+      completa de todas las guías (que tarda y tiene una pausa mínima). La recarga completa sigue siendo la que deja todo exacto. */
+  const recientes = useRef({ t: 0, enCurso: false });
+  const traerRecientes = useCallback(() => {
+    const r = recientes.current;
+    if (DEMO || r.t || !cache.cargado("pedidos") || (usuario.rol !== "admin" && usuario.rol !== "asistente") || E.rol === "mensajero") return;
+    r.t = window.setTimeout(async () => {
+      r.t = 0;
+      if (r.enCurso) return;
+      r.enCurso = true;
+      try {
+        const { pedidos } = await api.pedidos.listar({ limite: 60, sinMini: true });
+        let cambio = false;
+        const nuevos: Pedido[] = [];
+        for (const p of pedidos) {
+          const x = aPedido(p), viejo = S.pedidos[x.guia], mezcla = viejo ? { ...viejo, ...x } : x;
+          if (!viejo || JSON.stringify(mezcla) !== JSON.stringify(viejo)) { nuevos.push(mezcla); cambio = true; }
+        }
+        if (cambio) tocar(s => { for (const x of nuevos) s.pedidos[x.guia] = x; });
+      } catch { /* si falla, queda la recarga completa de siempre */ } finally { r.enCurso = false; }
+    }, 300);
+  }, [cache, usuario.rol]); // eslint-disable-line react-hooks/exhaustive-deps
   const cambioRemoto = useCallback((cols: readonly string[]) => {
+    if (cols.includes("pedidos")) traerRecientes();
     const a = aviso.current, ahora = Date.now();
     for (const n of cols) { const c = (n === "meta" ? "corte" : n) as Coleccion; if (TODAS.includes(c) && !a.lote.has(c)) a.lote.set(c, ahora); }
     if (!a.lote.size || a.t) return;
@@ -265,7 +288,7 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
       if (a.lote.size && espera) a.t = window.setTimeout(vaciar, espera + 50);
     };
     a.t = window.setTimeout(vaciar, JUNTAR_AVISOS);
-  }, [cache, traer]);
+  }, [cache, traer, traerRecientes]);
 
   useEffect(() => {
     // Cada 45 segundos (cada 5 minutos con el canal en tiempo real) y al volver a la app se actualiza solo lo que está en pantalla.
@@ -284,8 +307,8 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
 }
 
 /** Muestra "Cargando…" hasta que estén las colecciones (para las ventanas que se abren desde otra pestaña). */
-export function ConColecciones({ cols, children }: { cols: readonly Coleccion[]; children: ReactNode }) {
-  return useColecciones(cols) ? <>{children}</> : <div className="vacio" role="status">Cargando…</div>;
+export function ConColecciones({ cols, children, esperando }: { cols: readonly Coleccion[]; children: ReactNode; esperando?: ReactNode }) {
+  return useColecciones(cols) ? <>{children}</> : <>{esperando ?? <div className="vacio" role="status">Cargando…</div>}</>;
 }
 
 /** Pide las colecciones que usa una vista mientras está montada. Devuelve true cuando ya están en memoria. */

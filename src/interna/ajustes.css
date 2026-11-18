@@ -2277,3 +2277,9 @@
 .jsl .pedido-drawer-pie{flex-wrap:wrap;justify-content:flex-end}
 .jsl .pedido-detalle-panel .pedido-bloque .campo{margin-bottom:14px}
 .jsl .pedido-detalle-edicion .check-tarjeta{margin:2px 0 14px}
+
+/* Esqueleto del detalle de una guía mientras llega: mismo tamaño que la hoja final. */
+.jsl .esq{display:block;height:14px;border-radius:8px;background:linear-gradient(90deg,var(--hueco),var(--linea),var(--hueco));background-size:200% 100%;animation:esq 1.2s linear infinite;margin:0 0 12px}
+.jsl .esq-t{width:120px;height:20px;margin:0}.jsl .esq-l{width:40%}.jsl .esq-c{width:100%;height:38px;border-radius:10px}
+@keyframes esq{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.jsl .esq{animation:none}}
