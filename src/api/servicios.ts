@@ -39,6 +39,8 @@ export interface FiltrosPedidos {
   /** "todas" incluye las diferencias ya revisadas. */
   diferencia?: "todas" | "sinRevisar";
   sinRemitente?: boolean;
+  /** Por entregar, sin foto de salida y con más de 10 minutos (no los reintentos). */
+  sinFoto?: boolean;
   cambioPendiente?: boolean;
   sinServicio?: boolean;
   /** AAAA-MM-DD: salió, se entregó o se devolvió ese día (hora de Colombia). */
@@ -79,6 +81,12 @@ export const pedidos = {
   obtener: (guia: string) => datos<{ pedido: Pedido }>(api.get(`/pedidos/${guia}`)).then(d => d.pedido),
   crear: (d: { mensajeroId?: string; clienteId?: string | null; valorServicio?: number; aCobrar?: number } = {}) =>
     datos<{ pedido: Pedido }>(api.post("/pedidos", d)).then(r => r.pedido),
+  /** Crea la guía con su foto de salida en una sola petición: si la foto no se guarda, la guía no existe.
+      La oficina dice para qué mensajero; el mensajero no manda nada (queda a su nombre y en cero). */
+  crearConFoto: (foto: Blob, mensajeroId?: string) =>
+    datos<{ pedido: Pedido }>(api.post("/pedidos/con-foto", foto, {
+      headers: { "Content-Type": foto.type || "image/jpeg" }, params: limpio({ mensajeroId }), timeout: 60_000
+    })).then(r => r.pedido),
   actualizar: (guia: string, d: CambiosPedido) => datos<{ pedido: Pedido }>(api.patch(`/pedidos/${guia}`, d)).then(r => r.pedido),
   /** Remitente (`modo: "sin"`) o domicilio (`modo: "serv"`) a varias guías en una sola petición. */
   enBloque: (d: { modo: "sin" | "serv"; guias: string[]; clienteId?: string; valorServicio?: number; usarTarifaCliente?: boolean }) =>

@@ -4,7 +4,7 @@
    El mensajero no elige el remitente: la guía queda sin remitente y la oficina lo pone. */
 import { useEffect, useState } from "react";
 import { useVentana } from "../ui";
-import { crearGuias } from "../acciones";
+import { avisoGuias, crearGuias } from "../acciones";
 import { motivoError } from "../datos";
 
 export function DlgNuevaGuia({ fotos, mensajeroId, alCrear }: { fotos: File[]; mensajeroId: string; alCrear: (guias: string[]) => void }) {
@@ -18,8 +18,8 @@ export function DlgNuevaGuia({ fotos, mensajeroId, alCrear }: { fotos: File[]; m
   const crear = () => {
     v.cerrar();
     crearGuias(fotos, mensajeroId, () => {}).then(
-      guias => { alCrear(guias); v.avisar((guias.length === 1 ? "Guía " + guias[0] + " creada" : guias.length + " guías creadas")); },
-      e => v.avisar(textoError(e)),
+      r => { if (r.hechas.length) alCrear(r.hechas); v.avisar(avisoGuias(r, motivoError)); },
+      e => v.avisar("No se pudo crear la guía: " + motivoError(e) + ". Mira tus pedidos y, si no aparece, toma la foto otra vez."),
     );
   };
 
@@ -43,4 +43,3 @@ export function DlgNuevaGuia({ fotos, mensajeroId, alCrear }: { fotos: File[]; m
   </>;
 }
 
-const textoError = (e: unknown) => "No se pudo crear la guía: " + (navigator.onLine === false ? "no hay señal" : motivoError(e)) + ". Revisa tus pedidos antes de volver a tomar la foto.";

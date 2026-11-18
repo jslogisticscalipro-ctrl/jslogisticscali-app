@@ -25,27 +25,42 @@ const demoPedido = (guia: string, d: Partial<Pedido>) => tocar(s => { s.pedidos[
 const tras = async (x: Promise<unknown>) => { await x; await recargar(); };
 
 /* ---------- pedidos ---------- */
-/** Una guía por foto. Devuelve las guías creadas. */
+/** Una guía por foto. Si una foto no sube, esa guía no se crea y se sigue con las demás.
+    Devuelve las guías creadas, cuántas fotos fallaron y el error de la última que falló. */
 export async function crearGuias(files: File[], mensajeroId: string, avance: (msg: string) => void) {
   const hechas: string[] = [];
-  for (const f of files) {
-    if (files.length > 1) avance("Creando guía " + (hechas.length + 1) + " de " + files.length + "…");
-    if (DEMO) {
-      const n = Math.max(0, ...Object.values(S.pedidos).map(p => p.n)) + 1, guia = "JS-" + String(n).padStart(5, "0");
-      const mini = URL.createObjectURL(await comprimir(f, MINI));
-      tocar(s => { s.pedidos[guia] = { guia, n, estado: "pendiente", creado: Date.now(), entregado: null, mensajeroId, clienteId: "", clienteNombre: "", valorServicio: 0, aCobrar: 0,
-        destinatario: "", valorCobrado: 0, metodo: "", cuentaJs: "", difCobro: 0, difRevisada: false, motivoDev: "", notaDev: "", cobrarDev: false, cambio: false, cambioRecibido: null,
-        gasto: 0, gastoNota: "", domiPagado: false, domiPagoMedio: "", domiPagoValor: null, domiPagoFecha: 0, domiPagoUid: "", intentos: [], mini }; });
-      hechas.push(guia); continue;
-    }
-    const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
-    const p = await api.pedidos.crear(yo.esAdmin || yo.esAsistente ? { mensajeroId } : {});
-    hechas.push(p.guia);
-    // La foto y la miniatura no dependen una de otra: suben a la vez. La guía se muestra con la respuesta, sin recargar todo.
-    await Promise.all([api.pedidos.subirArchivo(p.guia, "salida", foto), api.pedidos.subirArchivo(p.guia, "mini", mini).catch(() => {})]);
-    ponerPedido(p);
+  let fallidas = 0, error: unknown = null;
+  for (const [i, f] of files.entries()) {
+    if (files.length > 1) avance("Creando guía " + (i + 1) + " de " + files.length + "…");
+    try {
+      if (DEMO) {
+        const n = Math.max(0, ...Object.values(S.pedidos).map(p => p.n)) + 1, guia = "JS-" + String(n).padStart(5, "0");
+        const mini = URL.createObjectURL(await comprimir(f, MINI));
+        tocar(s => { s.pedidos[guia] = { guia, n, estado: "pendiente", creado: Date.now(), entregado: null, mensajeroId, clienteId: "", clienteNombre: "", valorServicio: 0, aCobrar: 0,
+          destinatario: "", valorCobrado: 0, metodo: "", cuentaJs: "", difCobro: 0, difRevisada: false, motivoDev: "", notaDev: "", cobrarDev: false, cambio: false, cambioRecibido: null,
+          gasto: 0, gastoNota: "", domiPagado: false, domiPagoMedio: "", domiPagoValor: null, domiPagoFecha: 0, domiPagoUid: "", intentos: [], mini }; });
+        hechas.push(guia); continue;
+      }
+      const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
+      // La guía y su foto se crean juntas en el servidor: si la foto no sube, la guía no existe (no queda una guía sin foto
+      // que la oficina tenga que borrar). La miniatura va después y, si falla, la guía igual tiene su foto.
+      const p = await api.pedidos.crearConFoto(foto, yo.esAdmin || yo.esAsistente ? mensajeroId : undefined);
+      hechas.push(p.guia);
+      await api.pedidos.subirArchivo(p.guia, "mini", mini).catch(() => {});
+      ponerPedido(p);
+    } catch (e) { fallidas++; error = e; }
   }
-  return hechas;
+  return { hechas, fallidas, error };
+}
+
+/** Aviso corto con el resultado de `crearGuias`. Si una foto no subió, la guía de esa foto no existe y hay que tomarla otra vez.
+    Si se cayó la señal justo al terminar, la guía pudo quedar creada: por eso se pide mirar los pedidos antes de repetirla. */
+export function avisoGuias({ hechas, fallidas, error }: { hechas: string[]; fallidas: number; error: unknown }, motivo: (e: unknown) => string) {
+  if (!fallidas) return hechas.length === 1 ? "Guía " + hechas[0] + " creada" : hechas.length + " guías creadas";
+  const por = navigator.onLine === false ? "no hay señal" : motivo(error);
+  if (!hechas.length) return (fallidas === 1 ? "No se pudo crear la guía" : "No se pudo crear ninguna guía") + ": " + por + ". Mira tus pedidos y, si no aparece, toma la foto otra vez.";
+  // Empieza por «Falta» para que salga como advertencia, no como éxito.
+  return (fallidas === 1 ? "Falta 1 foto: no subió" : "Faltan " + fallidas + " fotos: no subieron") + " (" + por + "). " + (hechas.length === 1 ? "Se creó 1 guía" : "Se crearon " + hechas.length + " guías") + "; mira tus pedidos y toma otra vez las que falten.";
 }
 
 /** Recoger una guía "aceptado" (salió de una solicitud): sube la foto del paquete a esa misma guía (no crea otra)
@@ -56,7 +71,9 @@ export async function recoger(guia: string, f: File) {
     return demoPedido(guia, { estado: "pendiente", creado: Date.now(), mini });
   }
   const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
-  await Promise.all([api.pedidos.subirArchivo(guia, "salida", foto), api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {})]);
+  // Primero la foto y después la miniatura: si la foto falla, no queda una miniatura que haga parecer que sí subió.
+  await api.pedidos.subirArchivo(guia, "salida", foto);
+  await api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {});
   ponerPedido(await api.pedidos.recoger(guia));
 }
 

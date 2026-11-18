@@ -7,7 +7,7 @@ import {
 } from "../motor";
 import { Cab, EsqueletoPedido, EtqEstado, FiltroDia, FilaPedido, FotosGuia, IconoCamara, IconoFiltro, IconoInfo, Paginador, pl, useVentana } from "../ui";
 import { E } from "../estado";
-import { actualizarPedido, cambioEntregado, crearGuias, enBloque, eliminarPedido, reabrir } from "../acciones";
+import { actualizarPedido, avisoGuias, cambioEntregado, crearGuias, enBloque, eliminarPedido, reabrir } from "../acciones";
 import { aPedido, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
 import { usePorPaginaPedidos } from "../../lib/pantalla";
@@ -19,10 +19,15 @@ import { avisoContado } from "./comun";
 import type { CambiosPedido } from "../../api/servicios";
 
 
+/** Guía que se quedó sin foto de salida: por entregar, no es un reintento y lleva más de 10 minutos (la foto ya no está
+    subiendo). Igual que SQL_SIN_FOTO del backend. La oficina la borra y el mensajero vuelve a tomar la foto. */
+const sinFotoVieja = (p: Pedido) => !!p.sinFoto && p.estado === "pendiente" && !p.reintentoDe && Date.now() - p.creado > 10 * 6e4;
+
 /** Lo que pide cada filtro de la pestaña al servidor. */
 function filtrosServidor(f: string, buscar: string, mensajeroId: string, dia: string): Omit<FiltrosPedidos, "limite" | "cursor"> {
   const base = { buscar: buscar.trim() || undefined, mensajeroId: mensajeroId || undefined, dia: dia || undefined };
   if (f === "sin") return { ...base, sinRemitente: true };
+  if (f === "foto") return { ...base, sinFoto: true };
   if (f === "pend") return { ...base, estado: "pendiente" };
   if (f === "rec") return { ...base, estado: "aceptado" };
   if (f === "ent") return { ...base, estado: "entregado" };
@@ -37,6 +42,7 @@ function filtrosServidor(f: string, buscar: string, mensajeroId: string, dia: st
 function filtrarEnMemoria(f: string, buscar: string, mensajeroId: string, dia: string) {
   let ps = Object.values(S.pedidos).sort((a, b) => b.n - a.n);
   if (f === "sin") ps = ps.filter(p => !p.clienteId);
+  else if (f === "foto") ps = ps.filter(sinFotoVieja);
   else if (f === "pend") ps = ps.filter(p => p.estado === "pendiente");
   else if (f === "rec") ps = ps.filter(p => p.estado === "aceptado");
   else if (f === "ent") ps = ps.filter(p => p.estado === "entregado");
@@ -94,12 +100,13 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   const pag = q.data, ps = pag?.pedidos ?? [], total = pag?.total ?? 0;
   // Con miles de guías, ordenar y contar en cada pintada (cada tecla de la búsqueda) era trabajo repetido: se recalcula solo si cambian los datos o el filtro.
   const { version, pinta } = useDatos(), buscarA = E.buscarA, mensPed = E.mensPedA, diaPed = E.diaPedA;
-  const enBloque = useMemo(() => (f === "sin" || f === "serv" ? filtrarEnMemoria(f, buscarA, mensPed, diaPed) : []), [f, buscarA, mensPed, diaPed, version, pinta]);
-  const { totalPedidos, nSin, porEntregar, porRecoger, nCambio, nServ, nDif } = useMemo(() => {
+  const enBloque = useMemo(() => (f === "sin" || f === "serv" || f === "foto" ? filtrarEnMemoria(f, buscarA, mensPed, diaPed) : []), [f, buscarA, mensPed, diaPed, version, pinta]);
+  const { totalPedidos, nSin, porEntregar, porRecoger, nCambio, nServ, nDif, nFoto } = useMemo(() => {
     const todos = Object.values(S.pedidos), suyo = (p: Pedido) => !mensPed || p.mensajeroId === mensPed;
     return {
       totalPedidos: mensPed ? todos.filter(suyo).length : todos.length, nSin: todos.filter(p => !p.clienteId && suyo(p)).length, porEntregar: todos.filter(p => p.estado === "pendiente" && suyo(p)).length, porRecoger: todos.filter(p => p.estado === "aceptado" && suyo(p)).length,
       nCambio: todos.filter(cambioPendiente).length, nServ: todos.filter(sinServicio).length, nDif: todos.filter(p => Number(p.difCobro) && !p.difRevisada).length,
+      nFoto: todos.filter(p => sinFotoVieja(p) && suyo(p)).length,
     };
   }, [mensPed, version, pinta]);
   const irA = (n: number) => { poner({ paginaA: n }); arriba.current?.scrollIntoView({ block: "start", behavior: "smooth" }); };
@@ -111,16 +118,25 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   const cambiarBusqueda = (x: string) => { setBuscar(x); clearTimeout(tBuscar.current); tBuscar.current = window.setTimeout(() => poner({ buscarA: x, paginaA: 1 }), 300); };
   const aplicarFiltros = () => { poner({ mensPedA: borrador.mensajero, filtroA: borrador.estado, diaPedA: borrador.dia, paginaA: 1 }); cerrarFiltros(); };
   const filtrosActivos = Number(!!E.mensPedA) + Number(f !== "todos") + Number(!!E.diaPedA);
-  const estados: [string, string, number?][] = [["todos", "Todos los pedidos", totalPedidos], ["sin", "Sin remitente", nSin], ["rec", "Por recoger", porRecoger], ["pend", "Por entregar", porEntregar], ["ent", "Entregados"], ["dev", "Devueltos"], ["dif", "Con diferencia"], ["cambio", "Cambios por recibir", nCambio]];
+  const estados: [string, string, number?][] = [["todos", "Todos los pedidos", totalPedidos], ["sin", "Sin remitente", nSin], ["rec", "Por recoger", porRecoger], ["pend", "Por entregar", porEntregar], ["ent", "Entregados"], ["dev", "Devueltos"], ["dif", "Con diferencia"], ["cambio", "Cambios por recibir", nCambio],
+    // «Sin foto» solo aparece cuando hay alguna (o está elegida): con la creación en un solo paso casi nunca debería haber.
+    ...(nFoto || f === "foto" ? [["foto", "Sin foto", nFoto] as [string, string, number]] : [])];
 
   const fotos = async (lista: FileList | null) => {
     const files = [...(lista || [])].filter(x => x.type.startsWith("image/")).slice(0, 30); if (!files.length) return;
     const mid = oficinaElegida || ofis[0]?.id; if (!mid) return;
-    try {
-      const hechas = await crearGuias(files, mid, v.avisar);
-      v.avisar(hechas.length === 1 ? "Guía " + hechas[0] + " creada" : "Se crearon " + hechas.length + " guías");
-      if (hechas.length === 1) v.abrir(<AbrirPedido guia={hechas[0]} />, "drawer");
-    } catch (e) { v.avisar("No se pudo crear la guía: " + motivoError(e) + "."); }
+    const r = await crearGuias(files, mid, v.avisar);
+    v.avisar(avisoGuias(r, motivoError));
+    if (r.hechas.length === 1 && !r.fallidas) v.abrir(<AbrirPedido guia={r.hechas[0]} />, "drawer");
+  };
+
+  // Borrar las guías sin foto (van a la papelera, como al borrar una sola). Solo administración: el servidor lo exige igual.
+  const borrarSinFoto = async (lista: Pedido[]) => {
+    const n = lista.length;
+    if (!(await v.confirmar("¿Borrar " + (n === 1 ? "la guía sin foto" : "las " + n + " guías sin foto") + "?", "Van a la papelera. Avísale al mensajero para que vuelva a tomar la foto y se cree la guía otra vez.", "Borrar"))) return;
+    let fallas = 0, ultimo: unknown = null;
+    for (const p of lista) { try { await eliminarPedido(p.guia); } catch (e) { fallas++; ultimo = e; } }
+    v.avisar(fallas ? "No se pudo borrar " + (fallas === 1 ? "1 guía" : fallas + " guías") + ": " + motivoError(ultimo) + "." : (n === 1 ? "Guía enviada" : n + " guías enviadas") + " a la papelera");
   };
 
   return <>
@@ -148,6 +164,8 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
     {nCambio && f !== "cambio" ? <div className="banner amber"><IconoInfo /><span>{nCambio === 1 ? "Hay 1 prenda de cambio" : "Hay " + nCambio + " prendas de cambio"} por entregar a los clientes.</span><button onClick={() => poner({ filtroA: "cambio", paginaA: 1 })}>Ver cambios</button></div> : null}
     {nServ && f !== "serv" ? <div className="banner alerta"><IconoInfo /><span>{nServ === 1 ? "1 pedido entregado no tiene" : nServ + " pedidos entregados no tienen"} valor de servicio: el saldo del cliente queda mal hasta que lo pongas.</span><button onClick={() => poner({ filtroA: "serv", paginaA: 1 })}>Verlos</button></div>
       : f === "serv" ? <div className="banner info"><IconoInfo /><span>Mostrando los pedidos entregados sin valor de servicio. Ábrelos y ponles el domicilio.</span></div> : null}
+    {nFoto && f !== "foto" ? <div className="banner alerta"><IconoInfo /><span>{nFoto === 1 ? "1 guía se quedó" : nFoto + " guías se quedaron"} sin foto porque la foto no subió. Bórrala{nFoto === 1 ? "" : "s"} para que el mensajero la{nFoto === 1 ? "" : "s"} vuelva a crear con la foto.</span><button onClick={() => poner({ filtroA: "foto", paginaA: 1 })}>Verlas</button></div>
+      : f === "foto" ? <div className="banner info"><IconoInfo /><span>Guías por entregar a las que no les subió la foto. Al borrarlas van a la papelera; avísale al mensajero para que vuelva a tomar la foto.</span></div> : null}
     {nDif ? <div className="banner alerta"><IconoInfo /><span>{nDif === 1 ? "1 entrega tiene" : nDif + " entregas tienen"} un valor cobrado distinto al que debían cobrar.</span><button onClick={() => poner({ filtroA: "dif", paginaA: 1 })}>Verlas</button></div> : null}
     <div className="tp-movil">
       <div className="tp-movil-buscar"><input type="text" value={buscar} placeholder="Buscar guía, remitente…" aria-label="Buscar guía, remitente, destinatario o mensajero" onChange={e => cambiarBusqueda(e.target.value)} />{buscar && <button type="button" aria-label="Limpiar búsqueda" onClick={() => { clearTimeout(tBuscar.current); setBuscar(""); poner({ buscarA: "", paginaA: 1 }); }}>×</button>}</div>
@@ -177,14 +195,15 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
         <footer><button type="button" className="btn sec" onClick={() => setBorrador({ mensajero: "", estado: "todos", dia: "" })}>Limpiar filtros</button><button type="button" className="btn" onClick={aplicarFiltros}>Aplicar filtros</button></footer>
       </div>
     </div>}
-    {enBloque.length ? <div className="acciones" style={{ margin: "6px 0" }}><button className="btn" id="enBloque" onClick={() => v.abrir(<EnBloque modo={f} lista={enBloque} />)}>{f === "sin" ? "Asignar remitente a varios" : "Poner domicilio a varios"} ({enBloque.length})</button></div> : null}
+    {enBloque.length && f === "foto" ? (yo.esAdmin ? <div className="acciones" style={{ margin: "6px 0" }}><button className="btn peligro" id="borrarSinFoto" onClick={() => borrarSinFoto(enBloque)}>Borrar las guías sin foto ({enBloque.length})</button></div> : null)
+      : enBloque.length ? <div className="acciones" style={{ margin: "6px 0" }}><button className="btn" id="enBloque" onClick={() => v.abrir(<EnBloque modo={f as "sin" | "serv"} lista={enBloque} />)}>{f === "sin" ? "Asignar remitente a varios" : "Poner domicilio a varios"} ({enBloque.length})</button></div> : null}
     <div ref={arriba} style={{ scrollMarginTop: 90 }} />
     {pag && (E.diaPedA || E.mensPedA) ? <p className="sub">{total} {pl(total, "pedido")}{E.mensPedA ? " de " + (S.mensajeros[E.mensPedA]?.nombre || "") : ""}{E.diaPedA ? " que salieron o se cerraron ese día" : ""}</p> : null}
     {q.isError ? <div className="aviso alerta">No se pudo traer la lista: {motivoError(q.error)} <button className="btn chico" onClick={() => q.refetch()}>Intentar otra vez</button></div>
       : !pag ? <div className="vacio">Cargando pedidos…</div>
       : ps.length ? <><div className="lista" aria-busy={q.isFetching} style={q.isPlaceholderData ? { opacity: .6 } : undefined}>{ps.map(p => <FilaPedido key={p.guia} p={p} onClick={() => v.abrir(<AbrirPedido guia={p.guia} />, "drawer")} />)}</div>
       <Paginador pagina={pag.pagina} paginas={pag.paginas} total={total} porPagina={pag.porPagina} ir={irA} cargando={q.isPlaceholderData} salto /></>
-      : <div className="vacio">{f === "sin" ? "Todos los pedidos tienen remitente asignado." : f === "serv" ? "Todos los pedidos entregados tienen valor de servicio." : "No hay pedidos aquí."}</div>}
+      : <div className="vacio">{f === "foto" ? "Todas las guías por entregar tienen su foto." : f === "sin" ? "Todos los pedidos tienen remitente asignado." : f === "serv" ? "Todos los pedidos entregados tienen valor de servicio." : "No hay pedidos aquí."}</div>}
   </>;
 }
 
