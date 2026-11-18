@@ -2259,3 +2259,21 @@
 .jsl .combo-opcion.crear{flex-direction:row}
 .jsl .form-modal .combo-buscar input{padding-left:40px}
 .jsl .form-modal .combo-buscar:has(.combo-limpiar) input{padding-right:36px}
+
+/* Detalle de la guía: bloques alineados (remitente, tarifas, flete) */
+.jsl .rem-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.jsl .rem-cab label{margin:0}
+.jsl .rem-cab .btn{flex:none;min-height:30px;padding:4px 10px;font-size:.72rem}
+.jsl .pedido-bloque{display:grid;grid-template-columns:minmax(0,1fr);gap:0 12px;align-items:end}
+@media (min-width:380px){.jsl .pedido-bloque{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.jsl .pedido-bloque label small{display:block;margin:1px 0 0;font-size:.68rem;font-weight:500;line-height:1.25;color:var(--suave)}
+.jsl .monto{position:relative}
+.jsl .monto>span{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:800;color:var(--suave);pointer-events:none}
+.jsl .monto>input{padding-left:26px}
+.jsl .check-tarjeta{padding:12px;border:1px solid var(--linea);border-radius:14px;background:var(--papel)}
+.jsl .check-tarjeta:hover{border-color:var(--marca)}
+.jsl .pedido-detalle-panel .datos dt{display:flex;align-items:center;gap:6px}
+.jsl .pedido-detalle-panel .datos .ico-dato{flex:none;width:13px;height:13px;color:var(--suave)}
+.jsl .pedido-drawer-pie{flex-wrap:wrap;justify-content:flex-end}
+.jsl .pedido-detalle-panel .pedido-bloque .campo{margin-bottom:14px}
+.jsl .pedido-detalle-edicion .check-tarjeta{margin:2px 0 14px}

@@ -45,13 +45,15 @@ export function BuscadorRemitente({ elegido, alElegir, alCambiar, alEscribir, id
     alElegir({ id: c.id, nombre: c.nombre, tarifa });
   };
 
-  if (elegido) return <div className="campo"><label htmlFor={idEntrada + "-cambiar"}>{etiqueta}</label>
+  const cab = <div className="rem-cab"><label htmlFor={elegido ? idEntrada + "-cambiar" : idEntrada}>{etiqueta}</label>{extra}</div>;
+  if (elegido) return <div className="campo">{cab}
     <div className="ng-elegido"><div className="ng-elegido-txt"><b>{elegido.nombre}</b></div>
-      <button type="button" id={idEntrada + "-cambiar"} className="btn sec chico" onClick={() => { alCambiar(); setTimeout(() => entrada.current?.focus(), 0); }}>Cambiar</button></div>{extra}</div>;
-  return <div className="campo"><label htmlFor={idEntrada}>{etiqueta}</label>
-    <input id={idEntrada} ref={entrada} type="search" inputMode="search" placeholder="Escribe el nombre o el teléfono del cliente" autoComplete="off" aria-label="Buscar cliente" aria-describedby={ayuda} value={q}
-      onChange={e => { setQ(e.target.value); alEscribir?.(e.target.value); }} />
+      <button type="button" id={idEntrada + "-cambiar"} className="btn sec chico" onClick={() => { alCambiar(); setTimeout(() => entrada.current?.focus(), 0); }}>Cambiar</button></div></div>;
+  return <div className="campo">{cab}
+    <div className="combo-buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+      <input id={idEntrada} ref={entrada} type="text" inputMode="search" enterKeyHint="search" placeholder="Escribe el nombre del cliente…" autoComplete="off" aria-label="Buscar cliente" aria-describedby={ayuda} value={q}
+        onChange={e => { setQ(e.target.value); alEscribir?.(e.target.value); }} /></div>
+    <small id={ayuda} className="sub ng-ayuda" role="status">{q.trim().length < 2 ? "Escribe al menos 2 letras para buscar." : buscando ? "Buscando…" : opciones.length ? "" : "No hay un cliente con ese nombre. Puedes crearlo."}</small>
     <ul className="ng-lista" aria-label="Clientes encontrados">{opciones.map(c => <li key={c.id}><button type="button" disabled={eligiendo} onClick={() => elegir(c)}>{c.nombre}</button></li>)}</ul>
-    <small id={ayuda} className="sub ng-ayuda" role="status">{q.trim().length < 2 ? "Escribe al menos 2 letras." : buscando ? "Buscando…" : opciones.length ? "" : "No hay un cliente con ese nombre. Puedes crearlo."}</small>
-    {extra}</div>;
+  </div>;
 }

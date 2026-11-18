@@ -247,12 +247,12 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     <div className="pedido-drawer-cuerpo">
     <div className="pedido-detalle-grid">
     <section className="pedido-detalle-panel pedido-detalle-edicion" aria-label="Editar pedido">
-    <div className="linea2">
-      <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegirCli} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setQ}
-        extra={<button className="btn sec chico" id="pNuevoCli" type="button" style={{ alignSelf: "start", marginTop: 6 }} onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AbrirPedido guia={guia} cliElegido={cid} />, "drawer")} nombre={q} />, "centrada")}>+ Crear cliente nuevo</button>} />
-      <div className="campo"><label htmlFor="pServ">Valor del servicio</label><input id="pServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} /></div>
+    <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegirCli} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setQ}
+      extra={<button className="btn sec chico" id="pNuevoCli" type="button" onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AbrirPedido guia={guia} cliElegido={cid} />, "drawer")} nombre={q} />, "centrada")}>+ Crear cliente nuevo</button>} />
+    <div className="pedido-bloque">
+      <div className="campo"><label htmlFor="pServ">Valor del servicio</label><div className="monto"><span aria-hidden="true">$</span><input id="pServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} placeholder="0" /></div></div>
+      <div className="campo"><label htmlFor="pCob">Valor a cobrar<small className="sub">Al destinatario (opcional)</small></label><div className="monto"><span aria-hidden="true">$</span><input id="pCob" type="number" inputMode="numeric" min="0" step="100" value={cob} onChange={e => setCob(e.target.value)} placeholder="Lo que debe recoger" /></div></div>
     </div>
-    <div className="campo"><label htmlFor="pCob">Valor a cobrar al destinatario (opcional)</label><input id="pCob" type="number" inputMode="numeric" min="0" step="100" value={cob} onChange={e => setCob(e.target.value)} placeholder="Lo que el mensajero debe recoger" /></div>
     {p.estado === "devuelto" && <label className="check"><input type="checkbox" id="pDev" checked={dev} onChange={e => setDev(e.target.checked)} /> Cobrarle al cliente el domicilio de esta devolución</label>}
     {p.estado === "entregado" && yo.esAdmin && <>
       <div className="linea2"><div className="campo"><label htmlFor="pValCob">Valor que cobró el mensajero</label><input id="pValCob" type="number" inputMode="numeric" min="0" step="100" value={valCob} onChange={e => setValCob(e.target.value)} /></div>
@@ -261,9 +261,11 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     </>}
     {p.estado === "entregado" && (p.metodo === "transf_js" || yo.esAdmin) && <div className={"campo " + ((yo.esAdmin ? met : p.metodo) === "transf_js" ? "" : "oculto")} id="pCtaBox"><label htmlFor="pCta">Cuenta de JS donde llegó la transferencia</label>
       <select id="pCta" value={cta} onChange={e => setCta(e.target.value as "")}><option value="">Sin especificar</option>{Object.entries(CUENTAS_JS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>}
-    <div className="linea2"><div className="campo"><label htmlFor="pGasto">Flete / gasto pagado por el mensajero (se le cobra al cliente)</label><input id="pGasto" type="number" inputMode="numeric" min="0" step="1000" value={gasto} onChange={e => setGasto(e.target.value)} placeholder="0" /></div>
-      <div className="campo"><label htmlFor="pGastoNota">Detalle del gasto</label><input id="pGastoNota" value={gastoNota} onChange={e => setGastoNota(e.target.value)} placeholder="Ej: bus a Pasto" /></div></div>
-    <label className="check"><input type="checkbox" id="pDomi" checked={domi} onChange={e => { setDomi(e.target.checked); if (e.target.checked && !domiVal) setDomiVal(String((Number(serv) || 0) + (Number(gasto) || 0) || "")); }} /> El cliente ya pagó el domicilio</label>
+    <div className="pedido-bloque">
+      <div className="campo"><label htmlFor="pGasto">Flete / gasto mensajero<small className="sub">Se cobra al cliente</small></label><div className="monto"><span aria-hidden="true">$</span><input id="pGasto" type="number" inputMode="numeric" min="0" step="1000" value={gasto} onChange={e => setGasto(e.target.value)} placeholder="0" /></div></div>
+      <div className="campo"><label htmlFor="pGastoNota">Detalle del gasto<small className="sub">Concepto del flete</small></label><input id="pGastoNota" value={gastoNota} onChange={e => setGastoNota(e.target.value)} placeholder="Ej: bus a Pasto" /></div>
+    </div>
+    <label className="check check-tarjeta"><input type="checkbox" id="pDomi" checked={domi} onChange={e => { setDomi(e.target.checked); if (e.target.checked && !domiVal) setDomiVal(String((Number(serv) || 0) + (Number(gasto) || 0) || "")); }} /> El cliente ya pagó el domicilio</label>
     <div className={"linea2 " + (domi ? "" : "oculto")} id="pDomiBox"><div className="campo"><label htmlFor="pDomiMedio">¿Cómo pagó? (entra a la caja)</label>
       <select id="pDomiMedio" value={domiMedio} onChange={e => setDomiMedio(e.target.value)}><option value="">{p.domiPagado && !p.domiPagoMedio ? "No registrado en caja" : "Elige…"}</option>{Object.entries(MEDIOS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></div>
       <div className="campo"><label htmlFor="pDomiVal">Valor que pagó</label><input id="pDomiVal" type="number" inputMode="numeric" min="0" step="100" value={domiVal} onChange={e => setDomiVal(e.target.value)} /></div></div>
@@ -274,9 +276,9 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     <h3>Historial y trazabilidad</h3>
     <dl className="datos">
       {p.cambio && <><dt>Cambio</dt><dd>{p.cambioRecibido ? "El cliente lo recibió " + hora(p.cambioRecibido) : "Prenda por entregar al cliente"}</dd></>}
-      <dt>Mensajero</dt><dd>{S.mensajeros[p.mensajeroId]?.nombre || "—"}</dd>
-      {p.estado === "aceptado" ? <><dt>Estado</dt><dd>Por recoger: el mensajero todavía no le toma la foto al paquete</dd><dt>Asignado</dt><dd>{hora(p.creado)}</dd></>
-        : <><dt>Salió</dt><dd>{hora(p.creado)}</dd></>}
+      <dt><IcoDato n="usuario" />Mensajero</dt><dd>{S.mensajeros[p.mensajeroId]?.nombre || "—"}</dd>
+      {p.estado === "aceptado" ? <><dt>Estado</dt><dd>Por recoger: el mensajero todavía no le toma la foto al paquete</dd><dt><IcoDato n="reloj" />Asignado</dt><dd>{hora(p.creado)}</dd></>
+        : <><dt><IcoDato n="reloj" />Salió</dt><dd>{hora(p.creado)}</dd></>}
       {p.solicitud && <><dt>Recoger en</dt><dd>{p.solicitud.direccionRecogida}</dd><dt>Entregar a</dt><dd>{p.solicitud.destinatarioNombre}{p.solicitud.destinatarioTelefono ? " · " + p.solicitud.destinatarioTelefono : ""} · {p.solicitud.direccionEntrega}</dd></>}
       {p.intentos.map((i, k) => <IntentoFila key={k} n={k + 1} fecha={i.fecha} motivo={i.motivo} nota={i.nota} />)}
       {p.estado === "devuelto" && <><dt>Devuelto</dt><dd>{hora(p.entregado)}</dd><dt>Motivo</dt><dd>{MOTIVOS[p.motivoDev as Motivo] || ""}{p.notaDev ? " · " + p.notaDev : ""}</dd><dt>Efecto en saldo</dt><dd className={s < 0 ? "neg" : ""}>{pesos(s)}</dd></>}
@@ -287,7 +289,7 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
         <dt>Efecto en saldo</dt><dd className={s < 0 ? "neg" : "pos"}>{pesos(s)}</dd></>}
     </dl>
     </section>
-    {(p.estado === "devuelto" || p.reintentoDe || p.reintentos?.length) && <section className="pedido-detalle-panel" aria-label="Ubicación del paquete">
+    {(p.estado === "devuelto" || !!p.reintentoDe || (p.reintentos?.length ?? 0) > 0) && <section className="pedido-detalle-panel" aria-label="Ubicación del paquete">
     <BloqueDevolucion guia={guia} abrirGuia={g => v.abrir(<AbrirPedido guia={g} />, "drawer")} volver={() => v.abrir(<AbrirPedido guia={guia} />, "drawer")} />
     </section>}
     <section className="pedido-detalle-panel" aria-label="Registro fotográfico">
@@ -308,6 +310,9 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     </div>
   </div>;
 }
+/** Íconos discretos de la trazabilidad (usuario y reloj). */
+const IcoDato = ({ n }: { n: "usuario" | "reloj" }) => <svg className="ico-dato" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  {n === "usuario" ? <><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" /></> : <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}</svg>;
 const IntentoFila = ({ n, fecha, motivo, nota }: { n: number; fecha: number; motivo: string; nota: string }) =>
   <><dt>Intento {n}</dt><dd>{hora(fecha)} · {MOTIVOS[motivo as Motivo] || ""}{nota ? " · " + nota : ""}</dd></>;
 
