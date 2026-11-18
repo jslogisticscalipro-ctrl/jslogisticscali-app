@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
-  S, yo, hora, pesos, listaOrdenada, esRepartidor, tipoDe, cambioPendiente, sinServicio, delDia, nombreCliente, sinTildes, cerrado, gastoDe, pagoDomi,
+  S, yo, hora, pesos, listaOrdenada, esRepartidor, tipoDe, cambioPendiente, sinServicio, delDia, nombreCliente, cerrado, gastoDe, pagoDomi,
   saldoPedido, metodoTxt, pedidoLiquidado, cambiaLoContado, CUENTAS_JS, METODOS, MEDIOS, MOTIVOS, type Metodo, type Medio, type Motivo, type Pedido,
 } from "../motor";
 import { Cab, EtqEstado, FiltroDia, FilaPedido, FotosGuia, IconoCamara, IconoFiltro, IconoInfo, Paginador, pl, useVentana } from "../ui";
@@ -14,6 +14,7 @@ import { usePorPagina } from "../../lib/pantalla";
 import { pedidos as apiPedidos, type FiltrosPedidos } from "../../api/servicios";
 import { abrirEntregaEn, abrirDevolucionEn, BloqueDevolucion, DlgRecoger } from "../mensajero/modales";
 import { FormCliente } from "./modales";
+import { BuscadorRemitente } from "./BuscadorRemitente";
 import { avisoContado } from "./comun";
 import type { CambiosPedido } from "../../api/servicios";
 
@@ -187,8 +188,8 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
 export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: string }) {
   useDatos();
   const v = useVentana(), p0 = S.pedidos[guia];
-  const cs = listaOrdenada(S.clientes, "nombre");
   const [q, setQ] = useState(""), [cli, setCli] = useState(cliElegido || p0?.clienteId || "");
+  const [cliNombre, setCliNombre] = useState(() => { const id = cliElegido || p0?.clienteId || ""; return id ? nombreCliente(id) || p0?.clienteNombre || "" : ""; });
   const [serv, setServ] = useState(String(Number(p0?.valorServicio) || S.clientes[cliElegido || p0?.clienteId || ""]?.tarifa || ""));
   const [cob, setCob] = useState(String(Number(p0?.aCobrar) || "")), [dev, setDev] = useState(!!p0?.cobrarDev);
   const [valCob, setValCob] = useState(String(Number(p0?.valorCobrado) || 0)), [met, setMet] = useState<Metodo>((p0?.metodo as Metodo) || "efectivo"), [cta, setCta] = useState(p0?.cuentaJs || "");
@@ -196,8 +197,7 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
   const [domi, setDomi] = useState(!!p0?.domiPagado), [domiMedio, setDomiMedio] = useState<string>(p0?.domiPagoMedio || ""), [domiVal, setDomiVal] = useState(p0?.domiPagado ? String(pagoDomi(p0)) : "");
   const [guardando, setGuardando] = useState(false);
   const p = S.pedidos[guia]; if (!p) return null;
-  const vis = cs.filter(x => !q || sinTildes(x.nombre + " " + (x.telefono || "")).includes(sinTildes(q.trim())));
-  const elegirCli = (id: string) => { setCli(id); const t = S.clientes[id]?.tarifa; if (t && !serv) setServ(String(t)); };
+  const elegirCli = (c: { id: string; nombre: string; tarifa: number }) => { setCli(c.id); setCliNombre(c.nombre); if (c.tarifa && !serv) setServ(String(c.tarifa)); };
   const conCambio = async (fn: () => Promise<void>, ok: string, cerrar = true) => { try { await fn(); v.avisar(ok); if (cerrar) v.cerrar(); else v.abrir(<AbrirPedido guia={guia} />, "drawer"); } catch (e) { v.avisar("No se pudo guardar: " + motivoError(e)); } };
 
   const guardar = async () => {
@@ -244,11 +244,8 @@ export function AbrirPedido({ guia, cliElegido }: { guia: string; cliElegido?: s
     <div className="pedido-detalle-grid">
     <section className="pedido-detalle-panel pedido-detalle-edicion" aria-label="Editar pedido">
     <div className="linea2">
-      <div className="campo"><label htmlFor="pCli">Remitente (cliente)</label><input id="pCliBuscar" type="search" placeholder="Buscar cliente…" autoComplete="off" aria-label="Buscar cliente" value={q}
-        onChange={e => { setQ(e.target.value); const l = cs.filter(x => !e.target.value.trim() || sinTildes(x.nombre + " " + (x.telefono || "")).includes(sinTildes(e.target.value.trim()))); if (l.length === 1 && e.target.value.trim()) elegirCli(l[0].id); }} />
-        <select id="pCli" value={cli} onChange={e => elegirCli(e.target.value)}><option value="">{vis.length ? (q ? vis.length + " " + pl(vis.length, "encontrado") + "…" : "Elige…") : "Ningún cliente con ese nombre"}</option>
-          {(cli && !vis.some(x => x.id === cli) && S.clientes[cli] ? [S.clientes[cli], ...vis] : vis).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
-        <button className="btn sec chico" id="pNuevoCli" type="button" style={{ alignSelf: "start" }} onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AbrirPedido guia={guia} cliElegido={cid} />, "drawer")} nombre={q} />, "centrada")}>+ Crear cliente nuevo</button></div>
+      <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegirCli} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setQ}
+        extra={<button className="btn sec chico" id="pNuevoCli" type="button" style={{ alignSelf: "start", marginTop: 6 }} onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AbrirPedido guia={guia} cliElegido={cid} />, "drawer")} nombre={q} />, "centrada")}>+ Crear cliente nuevo</button>} />
       <div className="campo"><label htmlFor="pServ">Valor del servicio</label><input id="pServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} /></div>
     </div>
     <div className="campo"><label htmlFor="pCob">Valor a cobrar al destinatario (opcional)</label><input id="pCob" type="number" inputMode="numeric" min="0" step="100" value={cob} onChange={e => setCob(e.target.value)} placeholder="Lo que el mensajero debe recoger" /></div>
@@ -312,10 +309,9 @@ const IntentoFila = ({ n, fecha, motivo, nota }: { n: number; fecha: number; mot
 
 /* Pedidos en bloque: "sin" pone el mismo remitente a varias guías; "serv" pone el domicilio a varias entregas sin valor. */
 export function EnBloque({ modo, lista }: { modo: string; lista: Pedido[] }) {
-  const v = useVentana(), sin = modo === "sin", ps = lista.slice(), cs = listaOrdenada(S.clientes, "nombre");
+  const v = useVentana(), sin = modo === "sin", ps = lista.slice();
   const [sel, setSel] = useState(() => new Set(ps.map(p => p.guia)));
-  const [q, setQ] = useState(""), [cli, setCli] = useState(""), [serv, setServ] = useState(""), [suyo, setSuyo] = useState(true), [guardando, setGuardando] = useState(false);
-  const vis = cs.filter(c => !q.trim() || sinTildes(c.nombre + " " + (c.telefono || "")).includes(sinTildes(q.trim())));
+  const [cli, setCli] = useState(""), [cliNombre, setCliNombre] = useState(""), [serv, setServ] = useState(""), [suyo, setSuyo] = useState(true), [guardando, setGuardando] = useState(false);
   const marcar = (g: string, si: boolean) => setSel(s => { const n = new Set(s); if (si) n.add(g); else n.delete(g); return n; });
   const guardar = async () => {
     const valor = Number(serv) || 0, guias = ps.map(p => p.guia).filter(g => sel.has(g));
@@ -333,9 +329,8 @@ export function EnBloque({ modo, lista }: { modo: string; lista: Pedido[] }) {
   return <>
     <Cab sub={<span className="sub">{ps.length} {pl(ps.length, "guía")}</span>}><h2>{sin ? "Asignar remitente a varios" : "Poner domicilio a varios"}</h2></Cab>
     {sin ? <>
-      <div className="campo"><label htmlFor="ebCli">Remitente</label><input id="ebBus" type="search" placeholder="Buscar cliente…" autoComplete="off" style={{ marginBottom: 6 }} value={q}
-        onChange={e => { setQ(e.target.value); const l = cs.filter(c => !e.target.value.trim() || sinTildes(c.nombre + " " + (c.telefono || "")).includes(sinTildes(e.target.value.trim()))); if (l.length === 1 && e.target.value.trim()) { setCli(l[0].id); setServ(String(Number(l[0].tarifa) || "")); } }} />
-        <select id="ebCli" value={cli} onChange={e => { setCli(e.target.value); setServ(String(Number(S.clientes[e.target.value]?.tarifa) || "")); }}><option value="">{vis.length ? "Elige…" : "Ningún cliente con ese nombre"}</option>{vis.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
+      <BuscadorRemitente idEntrada="ebBus" etiqueta="Remitente" elegido={cli ? { id: cli, nombre: cliNombre } : null}
+        alElegir={c => { setCli(c.id); setCliNombre(c.nombre); setServ(String(c.tarifa || "")); }} alCambiar={() => { setCli(""); setCliNombre(""); setServ(""); }} />
       <div className="campo"><label htmlFor="ebServ">Valor del domicilio (opcional)</label><input id="ebServ" type="number" inputMode="numeric" min="0" step="100" placeholder="Se llena con el del cliente" value={serv} onChange={e => setServ(e.target.value)} /></div>
     </> : <>
       <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}><input type="checkbox" id="ebSuyo" checked={suyo} onChange={e => setSuyo(e.target.checked)} style={{ width: "auto" }} /><span>Usar el domicilio guardado de cada cliente</span></label>
