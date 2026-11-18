@@ -2307,3 +2307,5 @@
 .jsl .sd-semana .sd-celda:hover{background:var(--hueco);border-color:var(--linea)}
 .jsl .sd-semana .sd-celda:disabled{opacity:.5;cursor:default}
 .jsl .sd-semana .sd-celda em{font-style:normal;font-size:.65rem;font-weight:700;color:var(--verde)}
+.jsl .sd-semana .sd-celda.sin-desc{background:var(--verde-claro);border-color:var(--verde)}
+.jsl .sd-semana .sd-celda em{white-space:nowrap}

@@ -65,7 +65,7 @@ export default function Sueldos({ pintar }: { pintar: () => void }) {
             const d = R.dias[i], sd = ganaPorcentaje(f.m) && sinDescuento(f.m.id, d), puede = ganaPorcentaje(f.m) && d <= hoy() && (!!x || sd);
             const txt = x ? pesos(x) : "—";
             return <td key={i} className={"n" + (x < 0 ? " neg" : x ? "" : " sd-cero")}>{puede
-              ? <button type="button" className={"sd-celda" + (sd ? " sin-desc" : "")} disabled={ocupadoDia === f.m.id + d} title={sd ? "Sin descuento: toca para volver a descontar" : "Toca para quitar el descuento de este día"} aria-label={`${f.m.nombre}, ${DIAS_LARGOS[i]} ${d.slice(8)}: ${txt}${sd ? ", sin descuento" : ""}. Cambiar el descuento`} onClick={() => tocarDiaTabla(f.m, d, i)}>{txt}{sd && <em aria-hidden="true">sin desc.</em>}</button>
+              ? <button type="button" className={"sd-celda" + (sd ? " sin-desc" : "")} disabled={ocupadoDia === f.m.id + d} title={sd ? "Sin descuento: toca para volver a descontar" : "Toca para quitar el descuento de este día"} aria-label={`${f.m.nombre}, ${DIAS_LARGOS[i]} ${d.slice(8)}: ${txt}${sd ? ", sin descuento" : ""}. Cambiar el descuento`} onClick={() => tocarDiaTabla(f.m, d, i)}>{txt}{sd && <em aria-hidden="true">Sin descuento</em>}</button>
               : txt}</td>; })}
           <td className="n"><div className="sd-acciones">
             <button className="btn sec chico" onClick={() => detalle(f.m.id)} aria-label={"Ver detalle de " + f.m.nombre}><IconoCalendario /><span>Detalle</span></button>
