@@ -5,6 +5,8 @@ const COMPUTADOR = "(min-width: 768px)";
 /** El escritorio es el mismo corte en el que aparece el menú lateral (ver `estilos.css`). */
 const ESCRITORIO = "(min-width: 960px)";
 export const POR_PAGINA = { celular: 8, computador: 20 } as const;
+/** Pedidos de oficina: 10 en computador (menos miniaturas y filas por pintar); el celular sigue con 8. */
+export const POR_PAGINA_PEDIDOS = { celular: 8, computador: 10 } as const;
 
 const consulta = (q: string) => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(q) : null);
 const suscribir = (q: string) => (aviso: () => void) => { const m = consulta(q); m?.addEventListener("change", aviso); return () => m?.removeEventListener("change", aviso); };
@@ -15,6 +17,10 @@ const esComputadorAhora = coincide(COMPUTADOR), esEscritorioAhora = coincide(ESC
 /** 8 o 20, y cambia solo si se gira el celular o se cambia el tamaño de la ventana. */
 /** true desde 768 px (computador y tableta). Para mostrar una sola versión de algo (no dos con los mismos id). */
 export function useComputador() { return useSyncExternalStore(suscribirComputador, esComputadorAhora, () => false); }
+export function usePorPaginaPedidos() {
+  const esComputador = useSyncExternalStore(suscribirComputador, esComputadorAhora, () => false);
+  return esComputador ? POR_PAGINA_PEDIDOS.computador : POR_PAGINA_PEDIDOS.celular;
+}
 export function usePorPagina() {
   const esComputador = useSyncExternalStore(suscribirComputador, esComputadorAhora, () => false);
   return esComputador ? POR_PAGINA.computador : POR_PAGINA.celular;

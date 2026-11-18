@@ -10,7 +10,7 @@ import { E } from "../estado";
 import { actualizarPedido, cambioEntregado, crearGuias, enBloque, eliminarPedido, reabrir } from "../acciones";
 import { aPedido, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
-import { usePorPagina } from "../../lib/pantalla";
+import { usePorPaginaPedidos } from "../../lib/pantalla";
 import { pedidos as apiPedidos, type FiltrosPedidos } from "../../api/servicios";
 import { abrirEntregaEn, abrirDevolucionEn, BloqueDevolucion, DlgRecoger } from "../mensajero/modales";
 import { FormCliente } from "./modales";
@@ -89,7 +89,7 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
     pantalla.addEventListener("change", alCambiarPantalla);
     return () => { document.body.style.overflow = anterior; document.removeEventListener("keydown", tecla); pantalla.removeEventListener("change", alCambiarPantalla); };
   }, [filtrosMovilesAbiertos]);
-  const f = E.filtroA, porPagina = usePorPagina();
+  const f = E.filtroA, porPagina = usePorPaginaPedidos();
   const q = usePaginaPedidos(f, E.buscarA, E.mensPedA, E.diaPedA, E.paginaA, porPagina);
   const pag = q.data, ps = pag?.pedidos ?? [], total = pag?.total ?? 0;
   // Con miles de guías, ordenar y contar en cada pintada (cada tecla de la búsqueda) era trabajo repetido: se recalcula solo si cambian los datos o el filtro.
