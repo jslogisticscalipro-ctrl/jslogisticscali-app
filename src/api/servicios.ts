@@ -102,6 +102,8 @@ export const pedidos = {
   /** Crea la guía del reintento de un devuelto. El mensajero no manda nada (es suyo); la oficina elige quién lo hace. */
   reintentar: (guia: string, mensajeroId?: string) =>
     datos<{ pedido: Pedido; reintento: Pedido }>(api.post(`/pedidos/${guia}/reintento`, mensajeroId ? { mensajeroId } : {})),
+  /** URL firmadas de las miniaturas de estas guías (hasta 100): solo vienen las que la cuenta ve y que tienen miniatura. */
+  miniaturas: (guias: string[]) => datos<{ minis: Record<string, string> }>(api.post("/pedidos/miniaturas", { guias })).then(r => r.minis),
   archivos: (guia: string) => datos<{ archivos: Archivo[]; borradas?: boolean }>(api.get(`/pedidos/${guia}/archivos`)).then(d => {
     if (d.borradas) guiasConFotosBorradas.add(guia); else guiasConFotosBorradas.delete(guia);
     return d.archivos;

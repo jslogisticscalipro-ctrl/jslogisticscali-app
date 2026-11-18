@@ -88,8 +88,8 @@ export function necesarias(modo: string, tab: string, sub?: string): Coleccion[]
   return DE_PESTANA[tab] ?? TODAS;
 }
 
-/** Todas las guías que el usuario puede ver, de 1000 en 1000. La oficina no pide miniaturas (sus pantallas no las pintan
-    desde aquí); el mensajero sí, porque las ve en sus listas. */
+/** Todas las guías que el usuario puede ver, de 1000 en 1000. Nunca firma miniaturas: la oficina no las pinta desde aquí
+    y las filas del mensajero piden la suya al verse (`interna/miniaturas.ts`). */
 async function todosLosPedidos(sinMini: boolean) {
   const out: T.Pedido[] = [];
   let cursor: number | undefined;
@@ -121,10 +121,10 @@ async function todosLosClientes() {
 }
 
 /** Trae una colección y la deja en S con la forma del prototipo. Lo que el rol no puede ver queda vacío, como antes. */
-function cargadorDe(u: T.Usuario, col: Coleccion, modo: string): () => Promise<(s: Almacen) => void> {
+function cargadorDe(u: T.Usuario, col: Coleccion): () => Promise<(s: Almacen) => void> {
   const oficina = u.rol === "admin" || u.rol === "asistente";
   switch (col) {
-    case "pedidos": return async () => { const xs = (await todosLosPedidos(oficina && modo !== "mensajero")).map(aPedido); return s => { s.pedidos = porId(xs, "guia"); }; };
+    case "pedidos": return async () => { const xs = (await todosLosPedidos(true)).map(aPedido); return s => { s.pedidos = porId(xs, "guia"); }; };
     case "clientes": return async () => { const xs = oficina ? await todosLosClientes() : []; return s => { s.clientes = porId(xs.map(aCliente), "id"); }; };
     case "mensajeros": return async () => {
       const xs = oficina ? await api.mensajeros.listar() : u.mensajeroId ? await api.mensajeros.obtener(u.mensajeroId).then(m => [m]).catch(() => [] as T.Mensajero[]) : [];
@@ -194,12 +194,12 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
       if (!demoCargado.current) { Object.assign(S, datosDemo(usuario)); demoCargado.current = true; TODAS.forEach(c => void cache.obtener(c, async () => true)); setVersion(v => v + 1); }
       return;
     }
-    // Si el modo cambió (oficina ↔ mensajero), los pedidos se vuelven a pedir con o sin miniaturas.
+    // Si el modo cambió (oficina ↔ mensajero), los pedidos se vuelven a pedir.
     if (modo.current !== E.rol) { modo.current = E.rol; cache.invalidar("pedidos"); }
     const faltan = cols.filter(c => forzar || !cache.fresco(c));
     if (!faltan.length) return;
     try {
-      const aplicar = await Promise.all(faltan.map(c => cache.obtener(c, cargadorDe(usuario, c, E.rol), { forzar })));
+      const aplicar = await Promise.all(faltan.map(c => cache.obtener(c, cargadorDe(usuario, c), { forzar })));
       aplicar.forEach(fn => fn(S));
       // `version` está en las claves de las listas paginadas: solo sube cuando se actualiza lo que ya había (recarga
       // periódica o después de guardar). Traer una colección nueva al abrir otra pestaña solo vuelve a pintar.

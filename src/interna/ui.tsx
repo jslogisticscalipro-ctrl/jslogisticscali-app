@@ -6,6 +6,7 @@ import { DEMO } from "./demo";
 import type { Archivo } from "../api/tipos";
 import { pesos, hoy, moverDia, hora, diaDe, nombreCliente, S, type Pedido } from "./motor";
 import { SelectorFecha } from "./Calendario";
+import { useMini } from "./miniaturas";
 import { alertaAdmin, avisoRapido, tonoDeAviso } from "../lib/alertasAdmin";
 
 /* ---------- iconos ---------- */
@@ -150,7 +151,10 @@ export const EtqDev = ({ p }: { p: Pedido }) => <>
   {p.estado === "devuelto" && p.destinoDev === "por_definir" ? <>{" "}<span className="etq sin">Sin confirmar</span></> : null}
 </>;
 export const EtqDash = ({ p }: { p: Pedido }) => p.estado === "pendiente" ? <span className="etq ruta">En ruta</span> : <EtqEstado p={p} />;
-export const Mini = ({ p }: { p: Pedido }) => p.mini ? <img src={p.mini} alt="" loading="lazy" decoding="async" width={56} height={56} /> : <span className="sinfoto" aria-hidden="true">{svg(<><path d="m3 7 9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7M12 11v10" /></>)}</span>;
+export function Mini({ p }: { p: Pedido }) {
+  const { ref, url } = useMini(p);
+  return url ? <img ref={ref} src={url} alt="" loading="lazy" decoding="async" width={56} height={56} /> : <span ref={ref} className="sinfoto" aria-hidden="true">{svg(<><path d="m3 7 9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7M12 11v10" /></>)}</span>;
+}
 
 export function FilaPedido({ p, onClick }: { p: Pedido; onClick: () => void }) {
   const fechaCorta = new Date(p.creado).toLocaleDateString("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" }).replace(" de ", " ");
