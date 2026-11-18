@@ -95,10 +95,10 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   // Con miles de guías, ordenar y contar en cada pintada (cada tecla de la búsqueda) era trabajo repetido: se recalcula solo si cambian los datos o el filtro.
   const { version, pinta } = useDatos(), buscarA = E.buscarA, mensPed = E.mensPedA, diaPed = E.diaPedA;
   const enBloque = useMemo(() => (f === "sin" || f === "serv" ? filtrarEnMemoria(f, buscarA, mensPed, diaPed) : []), [f, buscarA, mensPed, diaPed, version, pinta]);
-  const { totalPedidos, porEntregar, porRecoger, nCambio, nServ, nDif } = useMemo(() => {
+  const { totalPedidos, nSin, porEntregar, porRecoger, nCambio, nServ, nDif } = useMemo(() => {
     const todos = Object.values(S.pedidos), suyo = (p: Pedido) => !mensPed || p.mensajeroId === mensPed;
     return {
-      totalPedidos: mensPed ? todos.filter(suyo).length : todos.length, porEntregar: todos.filter(p => p.estado === "pendiente" && suyo(p)).length, porRecoger: todos.filter(p => p.estado === "aceptado" && suyo(p)).length,
+      totalPedidos: mensPed ? todos.filter(suyo).length : todos.length, nSin: todos.filter(p => !p.clienteId && suyo(p)).length, porEntregar: todos.filter(p => p.estado === "pendiente" && suyo(p)).length, porRecoger: todos.filter(p => p.estado === "aceptado" && suyo(p)).length,
       nCambio: todos.filter(cambioPendiente).length, nServ: todos.filter(sinServicio).length, nDif: todos.filter(p => Number(p.difCobro) && !p.difRevisada).length,
     };
   }, [mensPed, version, pinta]);
@@ -111,7 +111,7 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   const cambiarBusqueda = (x: string) => { setBuscar(x); clearTimeout(tBuscar.current); tBuscar.current = window.setTimeout(() => poner({ buscarA: x, paginaA: 1 }), 300); };
   const aplicarFiltros = () => { poner({ mensPedA: borrador.mensajero, filtroA: borrador.estado, diaPedA: borrador.dia, paginaA: 1 }); cerrarFiltros(); };
   const filtrosActivos = Number(!!E.mensPedA) + Number(f !== "todos") + Number(!!E.diaPedA);
-  const estados: [string, string, number?][] = [["todos", "Todos los pedidos", totalPedidos], ["sin", "Sin remitente"], ["rec", "Por recoger", porRecoger], ["pend", "Por entregar", porEntregar], ["ent", "Entregados"], ["dev", "Devueltos"], ["dif", "Con diferencia"], ["cambio", "Cambios por recibir", nCambio]];
+  const estados: [string, string, number?][] = [["todos", "Todos los pedidos", totalPedidos], ["sin", "Sin remitente", nSin], ["rec", "Por recoger", porRecoger], ["pend", "Por entregar", porEntregar], ["ent", "Entregados"], ["dev", "Devueltos"], ["dif", "Con diferencia"], ["cambio", "Cambios por recibir", nCambio]];
 
   const fotos = async (lista: FileList | null) => {
     const files = [...(lista || [])].filter(x => x.type.startsWith("image/")).slice(0, 30); if (!files.length) return;
