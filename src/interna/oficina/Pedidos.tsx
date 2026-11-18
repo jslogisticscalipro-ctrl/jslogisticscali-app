@@ -183,7 +183,7 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
     {q.isError ? <div className="aviso alerta">No se pudo traer la lista: {motivoError(q.error)} <button className="btn chico" onClick={() => q.refetch()}>Intentar otra vez</button></div>
       : !pag ? <div className="vacio">Cargando pedidos…</div>
       : ps.length ? <><div className="lista" aria-busy={q.isFetching} style={q.isPlaceholderData ? { opacity: .6 } : undefined}>{ps.map(p => <FilaPedido key={p.guia} p={p} onClick={() => v.abrir(<AbrirPedido guia={p.guia} />, "drawer")} />)}</div>
-      <Paginador pagina={pag.pagina} paginas={pag.paginas} total={total} porPagina={pag.porPagina} ir={irA} cargando={q.isPlaceholderData} /></>
+      <Paginador pagina={pag.pagina} paginas={pag.paginas} total={total} porPagina={pag.porPagina} ir={irA} cargando={q.isPlaceholderData} salto /></>
       : <div className="vacio">{f === "sin" ? "Todos los pedidos tienen remitente asignado." : f === "serv" ? "Todos los pedidos entregados tienen valor de servicio." : "No hay pedidos aquí."}</div>}
   </>;
 }

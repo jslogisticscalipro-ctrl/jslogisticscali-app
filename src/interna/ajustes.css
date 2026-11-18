@@ -170,6 +170,8 @@
 .jsl .paginador .btn{min-height:44px}
 .jsl .paginador .btn:disabled{opacity:.45;cursor:default}
 .jsl .paginador .sub{text-align:center;flex:1;min-width:0;margin:0}
+.jsl .paginador .pag-salto{display:none}
+@media (min-width:768px){.jsl .paginador .pag-salto{display:inline-flex}.jsl .paginador .pag-ir{align-items:center;gap:6px}.jsl .paginador .pag-ir input{width:84px;min-height:44px;padding:0 8px;border:1px solid var(--borde,#cbd5e1);border-radius:10px;background:transparent;color:inherit;font:inherit}}
 @media (max-width:420px){.jsl .paginador .pag-rango{display:none}}
 
 /* ---------- Caja: cierre del día, fichas y tarjetas de mensajeros ---------- */

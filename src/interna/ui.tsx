@@ -1,5 +1,5 @@
 /* Piezas comunes de la app interna, con el mismo HTML y las mismas clases del prototipo (app/js/app.js). */
-import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useDatos } from "./datos";
 import { pedidos as apiPedidos, guiasConFotosBorradas } from "../api/servicios";
 import { DEMO } from "./demo";
@@ -232,14 +232,24 @@ export function FotosGuia({ p, id, firma = "Firma", conPrevias, soloSalida }: { 
 export const useVersion = () => useDatos().version;
 
 /** Paginador de listas: la página la corta el servidor; aquí solo se muestra y se pide otra. */
-export function Paginador({ pagina, paginas, total, porPagina, ir, cargando }: { pagina: number; paginas: number; total: number; porPagina: number; ir: (p: number) => void; cargando?: boolean }) {
+export function Paginador({ pagina, paginas, total, porPagina, ir, cargando, salto }: { pagina: number; paginas: number; total: number; porPagina: number; ir: (p: number) => void; cargando?: boolean; salto?: boolean }) {
   if (paginas <= 1) return null;
   const desde = (pagina - 1) * porPagina + 1, hasta = Math.min(total, pagina * porPagina);
+  // «salto» (solo computador, ver `.pag-salto`): primera, última y ir a una página; útil cuando hay muchas páginas.
+  const irDirecto = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const campo = e.currentTarget.elements.namedItem("pagina") as HTMLInputElement, n = Math.round(Number(campo.value));
+    campo.value = "";
+    if (n >= 1 && n <= paginas && n !== pagina) ir(n);
+  };
   return (
     <nav className="paginador" aria-label="Páginas de la lista">
+      {salto && <button className="btn sec pag-salto" disabled={pagina <= 1 || cargando} onClick={() => ir(1)} aria-label="Primera página">« Primera</button>}
       <button className="btn sec" disabled={pagina <= 1 || cargando} onClick={() => ir(pagina - 1)} aria-label="Página anterior">‹ Anterior</button>
       <span className="sub" aria-live="polite">Página <b>{pagina}</b> de {paginas}<span className="pag-rango"> · {desde}–{hasta} de {total}</span></span>
       <button className="btn sec" disabled={pagina >= paginas || cargando} onClick={() => ir(pagina + 1)} aria-label="Página siguiente">Siguiente ›</button>
+      {salto && <button className="btn sec pag-salto" disabled={pagina >= paginas || cargando} onClick={() => ir(paginas)} aria-label="Última página">Última »</button>}
+      {salto && <form className="pag-salto pag-ir" onSubmit={irDirecto}><label htmlFor="pagIr" className="sub">Ir a</label><input id="pagIr" name="pagina" type="number" inputMode="numeric" min={1} max={paginas} placeholder={"1–" + paginas} aria-label="Ir a la página" /><button className="btn sec" disabled={cargando}>Ir</button></form>}
     </nav>
   );
 }
