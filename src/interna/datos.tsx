@@ -161,7 +161,7 @@ interface Datos {
   /** ¿Están ya en memoria (aunque se estén actualizando)? */
   tiene: (cols: readonly Coleccion[]) => boolean;
   /** Llegó un aviso en tiempo real (GET /eventos) con las colecciones que cambiaron: se vuelven a pedir solo las que están en uso. */
-  cambioRemoto: (cols: readonly string[]) => void;
+  cambioRemoto: (cols: readonly string[], pedidosQuitados?: readonly string[]) => void;
   /** El canal en tiempo real se conectó o se cayó: con el canal vivo la recarga periódica es lenta; sin él, la de siempre. */
   canalEstado: (vivo: boolean) => void;
 }
@@ -233,6 +233,9 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   const precargar = useCallback((cols: readonly Coleccion[]) => { void traer(cols); }, [traer]);
   const tiene = useCallback((cols: readonly Coleccion[]) => DEMO ? demoCargado.current : cols.every(c => cache.cargado(c)), [cache]);
 
+  // Con `fn` cambió el almacén (lo que respondió el servidor, o la demo): sube `version` y las listas se vuelven a pedir.
+  // Sin `fn` es solo volver a pintar (cambió la pestaña o un filtro de `E`): antes eso también volvía a pedir la página.
+  const tocar = useCallback((fn?: (s: Almacen) => void) => { if (fn) { fn(S); setVersion(v => v + 1); } else setPinta(v => v + 1); }, []);
   const [canal, setCanal] = useState(false);
   const huboCaida = useRef(false), aviso = useRef({ t: 0, lote: new Map<Coleccion, number>() });
   const canalEstado = useCallback((vivo: boolean) => {
@@ -266,7 +269,10 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
       } catch { /* si falla, queda la recarga completa de siempre */ } finally { r.enCurso = false; }
     }, 300);
   }, [cache, usuario.rol]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cambioRemoto = useCallback((cols: readonly string[]) => {
+  const cambioRemoto = useCallback((cols: readonly string[], pedidosQuitados?: readonly string[]) => {
+    // Una guía borrada (o pasada a otro mensajero) sale de la lista al instante: la recarga completa de pedidos tiene una pausa
+    // mínima de 45 s y, mientras tanto, el mensajero seguiría viéndola.
+    if (pedidosQuitados?.some(g => S.pedidos[g])) tocar(s => { for (const g of pedidosQuitados) delete s.pedidos[g]; });
     if (cols.includes("pedidos")) traerRecientes();
     const a = aviso.current, ahora = Date.now();
     for (const n of cols) { const c = (n === "meta" ? "corte" : n) as Coleccion; if (TODAS.includes(c) && !a.lote.has(c)) a.lote.set(c, ahora); }
@@ -288,7 +294,7 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
       if (a.lote.size && espera) a.t = window.setTimeout(vaciar, espera + 50);
     };
     a.t = window.setTimeout(vaciar, JUNTAR_AVISOS);
-  }, [cache, traer, traerRecientes]);
+  }, [cache, traer, traerRecientes, tocar]);
 
   useEffect(() => {
     // Cada 45 segundos (cada 5 minutos con el canal en tiempo real) y al volver a la app se actualiza solo lo que está en pantalla.
@@ -299,9 +305,6 @@ export function ProveedorDatos({ usuario, children }: { usuario: T.Usuario; chil
   }, [traer, canal]);
   useEffect(() => () => window.clearTimeout(aviso.current.t), []);
 
-  // Con `fn` cambió el almacén (lo que respondió el servidor, o la demo): sube `version` y las listas se vuelven a pedir.
-  // Sin `fn` es solo volver a pintar (cambió la pestaña o un filtro de `E`): antes eso también volvía a pedir la página.
-  const tocar = useCallback((fn?: (s: Almacen) => void) => { if (fn) { fn(S); setVersion(v => v + 1); } else setPinta(v => v + 1); }, []);
   conectar(tocar, recargar, recargarSolo);
   return <Ctx.Provider value={{ version, pinta, error, recargar, tocar, usar, precargar, tiene, cambioRemoto, canalEstado }}>{children}</Ctx.Provider>;
 }
