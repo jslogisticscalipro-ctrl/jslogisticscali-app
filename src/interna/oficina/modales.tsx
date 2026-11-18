@@ -4,13 +4,13 @@
    colecciones de su pestaña (datos.tsx), por si se abre desde una que no las tenía cargadas. */
 import type { ComponentProps, ComponentType } from "react";
 import { perezoso } from "../../lib/perezoso";
-import { ConColecciones, necesarias } from "../datos";
+import { ConColecciones, necesarias, type Coleccion } from "../datos";
 import type * as P from "./Pedidos";
 import type * as C from "./Clientes";
 import type * as K from "./Caja";
 
-function ventana<X extends object>(pestana: string, Comp: ComponentType<X>) {
-  const cols = necesarias("admin", pestana);
+function ventana<X extends object>(pestana: string, Comp: ComponentType<X>, colecciones?: readonly Coleccion[]) {
+  const cols = colecciones ?? necesarias("admin", pestana);
   return (props: X) => <ConColecciones cols={cols}><Comp {...props} /></ConColecciones>;
 }
 
@@ -19,6 +19,7 @@ export const AbrirPedido = ventana("pedidos", perezoso<ComponentProps<typeof P.A
 export const AsignarRemitente = perezoso<ComponentProps<typeof P.AsignarRemitente>>(() => import("./Pedidos").then(m => ({ default: m.AsignarRemitente })));
 export const EnBloque = ventana("pedidos", perezoso<ComponentProps<typeof P.EnBloque>>(() => import("./Pedidos").then(m => ({ default: m.EnBloque }))));
 export const AbrirCuenta = ventana("clientes", perezoso<ComponentProps<typeof C.AbrirCuenta>>(() => import("./Clientes").then(m => ({ default: m.AbrirCuenta }))));
-export const FormCliente = ventana("clientes", perezoso<ComponentProps<typeof C.FormCliente>>(() => import("./Clientes").then(m => ({ default: m.FormCliente }))));
+/** Solo usa la lista de clientes (para avisar de parecidos): no espera guías, movimientos, caja, usuarios ni recaudos. */
+export const FormCliente = ventana("clientes", perezoso<ComponentProps<typeof C.FormCliente>>(() => import("./Clientes").then(m => ({ default: m.FormCliente }))), ["clientes"]);
 export const MovCaja = ventana("caja", perezoso<ComponentProps<typeof K.MovCaja>>(() => import("./Caja").then(m => ({ default: m.MovCaja }))));
 export const CambiarMedio = ventana("caja", perezoso<ComponentProps<typeof K.CambiarMedio>>(() => import("./Caja").then(m => ({ default: m.CambiarMedio }))));
