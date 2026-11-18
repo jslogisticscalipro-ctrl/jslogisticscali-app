@@ -162,6 +162,8 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
   const conDescuento = ganaPorcentaje(m);
   const tocarSinDescuento = async (dia: string) => {
     const marcado = sinDescuento(mid, dia);
+    const nom = `${DIAS_LARGOS[r.dias.indexOf(dia)]} ${diaCorto(dia)}`;
+    if (!await v.confirmar(marcado ? "Volver a descontar" : "Quitar el descuento", marcado ? `¿Volver a descontarle ${pesos(DESC_SUELDO)} a ${m.nombre} el ${nom}?` : `¿Quitarle el descuento de ${pesos(DESC_SUELDO)} a ${m.nombre} el ${nom}?`, marcado ? "Sí, descontar" : "Sí, quitar")) return volver();
     setOcupado(dia);
     try { await ponerSinDescuento(mid, dia, !marcado); v.avisar(marcado ? `Ese día vuelve a descontarle ${pesos(DESC_SUELDO)} a ${m.nombre}` : `Ese día no se le descuentan ${pesos(DESC_SUELDO)} a ${m.nombre}`); } catch (e) { fallo(v)(e); }
     setOcupado("");
@@ -181,16 +183,20 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
     </dl>
     <h3 className="sd-titulo">Sueldo por día</h3>
     {editable && <p className="sub sd-ayuda">{m.tarifa ? <>Toca un día para marcarlo con {pesos(m.tarifa)}; otro toque lo quita. {enlace("Cambiar pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))} · {enlace("otro valor", () => v.abrir(<OtroValor m={m} dias={r.dias} />, "centrada-ancha"))}</> : enlace("Poner pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))}</p>}
-    {conDescuento && <p className="sub sd-ayuda">Cada día se le descuentan {pesos(DESC_SUELDO)}. Si un día no debe descontarse, toca “Sin descuento”; otro toque lo quita.</p>}
+    {conDescuento && <p className="sub sd-ayuda">Cada día se le descuentan {pesos(DESC_SUELDO)}. Si un día no debe descontarse, toca ese día y confirma; si lo vuelves a tocar, se confirma que vuelva el descuento.</p>}
     <ul className="sd-dias">
-      {r.dias.map((d, i) => { const val = r.vals[i], j = jornada(mid, d), sd = conDescuento && sinDescuento(mid, d), puedeMarcar = conDescuento && d <= hoyS && (!!val || sd); return <li key={d}>
-        <span>{DIAS_LARGOS[i]} <small>{diaCorto(d)}</small></span>
-        {editable
-          ? <button className="dia-btn" aria-pressed={!!j} disabled={(d > hoyS && !j) || ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${j ? "trabajó" : "no trabajó"}`} onClick={() => tocarDia(d)}>{j ? "✓ " + pesos(j) : "—"}</button>
-          : <span className="sd-der">
-            {puedeMarcar && <button type="button" className="dia-btn sd-sindesc" aria-pressed={sd} disabled={ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${sd ? "sin descuento, tocar para volver a descontar" : "con descuento, tocar para quitarlo"}`} onClick={() => tocarSinDescuento(d)}>{sd ? "✓ Sin descuento" : "Sin descuento"}</button>}
-            <b className={val < 0 ? "neg" : val ? "" : "sd-cero"}>{val ? pesos(val) : "—"}</b>
-          </span>}
+      {r.dias.map((d, i) => { const val = r.vals[i], j = jornada(mid, d), sd = conDescuento && sinDescuento(mid, d), puedeMarcar = !editable && conDescuento && d <= hoyS && (!!val || sd);
+        const monto = <b className={val < 0 ? "neg" : val ? "" : "sd-cero"}>{val ? pesos(val) : "—"}</b>;
+        return <li key={d}>
+        {editable ? <>
+          <span>{DIAS_LARGOS[i]} <small>{diaCorto(d)}</small></span>
+          <button className="dia-btn" aria-pressed={!!j} disabled={(d > hoyS && !j) || ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${j ? "trabajó" : "no trabajó"}`} onClick={() => tocarDia(d)}>{j ? "✓ " + pesos(j) : "—"}</button>
+        </> : puedeMarcar
+          ? <button type="button" className="sd-fila" aria-pressed={sd} disabled={ocupado === d} aria-label={`${DIAS_LARGOS[i]} ${diaCorto(d)}: ${sd ? "sin descuento, tocar para volver a descontar" : "con descuento, tocar para quitarlo"}`} onClick={() => tocarSinDescuento(d)}>
+            <span>{DIAS_LARGOS[i]} <small>{diaCorto(d)}</small></span>
+            <span className="sd-der">{sd && <em className="sd-sindesc-marca">Sin descuento</em>}{monto}</span>
+          </button>
+          : <><span>{DIAS_LARGOS[i]} <small>{diaCorto(d)}</small></span><span className="sd-der">{monto}</span></>}
       </li>; })}
     </ul>
     <div className="sd-pie">

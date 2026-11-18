@@ -2294,3 +2294,11 @@
 .jsl .sd-resumen-arriba{margin:0 0 14px}
 .jsl .sd-semana th:last-child,.jsl .sd-semana td:last-child{position:sticky;right:0;z-index:1;background:var(--papel);box-shadow:-1px 0 0 var(--linea)}
 .jsl .sd-semana th:last-child,.jsl .sd-semana .sd-total td:last-child{background:var(--hueco)}
+/* Detalle de sueldo: el día entero es el botón para quitar o devolver el descuento (pide confirmar). */
+.jsl .sd-dias li:has(> .sd-fila){padding:0}
+.jsl .sd-dias .sd-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;padding:6px 14px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.jsl .sd-dias .sd-fila:hover,.jsl .sd-dias .sd-fila:active{background:var(--papel)}
+.jsl .sd-dias .sd-fila:disabled{opacity:.5;cursor:default}
+.jsl .sd-dias .sd-fila > span:first-child{font-weight:600;font-size:.88rem}
+.jsl .sd-dias .sd-fila > span small{margin-left:4px;font-weight:400;color:var(--suave)}
+.jsl .sd-sindesc-marca{font-style:normal;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--verde-claro);color:var(--verde)}
