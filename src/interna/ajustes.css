@@ -2244,3 +2244,18 @@
 
 /* Inicio del mensajero (celular): acceso "Escanear QR" (reemplaza a "En ruta", que ya está en las cifras de abajo). */
 .jsl .im-acc-qr{background:var(--azul-claro);border-color:color-mix(in srgb,var(--azul) 30%,transparent);color:var(--azul);box-shadow:none}
+
+/* Combo de cliente en Cuentas → Movimientos: fila con saldo a la derecha, opción activa por teclado y botón de limpiar. */
+.jsl .combo-opcion.fila{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+.jsl .combo-opcion.fila.activa{background:color-mix(in srgb,var(--marca2) 12%,transparent)}
+.jsl .combo-nom{display:flex;flex-direction:column;min-width:0}
+.jsl .combo-nom b{font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jsl .combo-nom small{font-size:.7rem;color:var(--suave)}
+.jsl .combo-opcion.fila em{flex:none;font-style:normal;font-size:.72rem;font-weight:600;color:var(--suave)}
+.jsl .combo-opcion.fila em.neg,.jsl .combo-chip small.neg{color:var(--rojo)}
+.jsl .combo-opcion.fila em.pos,.jsl .combo-chip small.pos{color:var(--verde)}
+.jsl .combo-limpiar{position:absolute;right:6px;width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--suave);font-size:1.1rem;cursor:pointer}
+.jsl .combo-buscar:has(.combo-limpiar) input{padding-right:36px}
+.jsl .combo-opcion.crear{flex-direction:row}
+.jsl .form-modal .combo-buscar input{padding-left:40px}
+.jsl .form-modal .combo-buscar:has(.combo-limpiar) input{padding-right:36px}

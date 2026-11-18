@@ -14,6 +14,7 @@ import { DEMO } from "../demo";
 import { caja as apiCaja, cuentasInternas as apiCuentas, movimientos as apiMovimientos } from "../../api/servicios";
 import { usePorPaginaCuentas, usePorPaginaInternos } from "../../lib/pantalla";
 import type { GananciaCliente, PaginaCajaMovimientos, PaginaGanancias, PaginaMovimientos, ResumenCuentas } from "../../api/tipos";
+import { ComboCliente } from "../ComboCliente";
 import { avisoContado, diaAntesDelArqueo } from "./comun";
 import { CambiarMedio, FormCliente } from "./modales";
 
@@ -355,18 +356,18 @@ export function MovClienteOficina({ tipo, mov, pre }: { tipo: TipoMov; mov?: Mov
   const conMedio = compra || pago || pagoA, soloHoy = (pago || pagoA) && !yo.esAdmin; // los pagos que registra el asistente quedan con la hora del momento
   const miCaja = useMemo(() => (yo.esAsistente && yo.uid ? cajaOficina(yo.uid).saldo : null), [version, pinta]);
   const v0: Escrito = pre || (mov ? { cid: mov.clienteId, val: String(mov.valor), medio: mov.medio, dia: diaDe(mov.fecha), nota: mov.nota } : { cid: "", val: "", medio: compra ? "efectivo" : "", dia: hoy(), nota: "" });
-  const [x, setX] = useState<Escrito>(v0), [bus, setBus] = useState(""), [guardando, setGuardando] = useState(false);
+  const [x, setX] = useState<Escrito>(v0), [guardando, setGuardando] = useState(false);
   const titulo = pago ? (mov ? "Editar pago" : "Pago de un cliente") : pagoA ? (mov ? "Editar pago al cliente" : "Pagarle a un cliente") : compra ? (mov ? "Editar compra" : "Compra para un cliente") : mov ? "Editar ganancia ocasional" : "Ganancia ocasional";
-  const q = sinTildes(bus.trim()), vis = cs.filter(c => !q || sinTildes(c.nombre + " " + (c.telefono || "")).includes(q));
+  // Saldos de todos los clientes: una sola vez por cambio de datos, no por tecla (la lista del combo solo los lee)
+  const saldos = useMemo(() => new Map(cs.map(c => [c.id, saldoCliente(c.id)])), [cs]);
   const s = useMemo(() => (x.cid ? saldoCliente(x.cid) : 0), [x.cid, version, pinta]);
   const elegir = (cid: string) => {
     const sc = cid ? saldoCliente(cid) : 0; let val = x.val;
     if (!mov && cid && !val) { if (pago && sc < 0) val = String(-sc); if (pagoA && sc > 0) val = String(sc); }
     setX({ ...x, cid, val });
   };
-  const buscar = (t: string) => { setBus(t); const qq = sinTildes(t.trim()), l = cs.filter(c => !qq || sinTildes(c.nombre + " " + (c.telefono || "")).includes(qq)); if (l.length === 1 && qq) elegir(l[0].id); };
   // Cliente que todavía no está registrado: se crea y se vuelve al formulario con lo que ya estaba escrito
-  const nuevoCli = () => v.abrir(<FormCliente nombre={bus.trim()} alGuardar={cid => v.abrir(<MovClienteOficina tipo={tipo} mov={mov} pre={{ ...x, cid }} />, "centrada")} />, "centrada");
+  const nuevoCli = (texto: string) => v.abrir(<FormCliente nombre={texto} alGuardar={cid => v.abrir(<MovClienteOficina tipo={tipo} mov={mov} pre={{ ...x, cid }} />, "centrada")} />, "centrada");
   const guardar = async () => {
     const valor = Number(x.val), medio = conMedio ? x.medio : "";
     if (!x.cid) return v.avisar("Elige el cliente"); if (!(valor > 0)) return v.avisar("Escribe un valor mayor a cero");
@@ -382,8 +383,8 @@ export function MovClienteOficina({ tipo, mov, pre }: { tipo: TipoMov; mov?: Mov
     <Cab><h2>{titulo}</h2></Cab>
     {mov && <div className="campo"><label htmlFor="mxTipo">Tipo</label><select id="mxTipo" value={tipo} onChange={e => v.abrir(<MovClienteOficina tipo={e.target.value as TipoMov} mov={mov} pre={x} />, "centrada")}>{MOVS_OFICINA.map(k => <option key={k} value={k}>{MOVS[k].t}</option>)}</select></div>}
     <p className="sub">{pago ? "El dinero entra a la caja en el medio que elijas y se descuenta de lo que el cliente debe." : pagoA ? "Le entregas al cliente su saldo a favor: sale de la caja en el medio que elijas y se descuenta de lo que JS le debe." + (miCaja ? ` Tienes ${MEDIOS_K.map(k => MEDIOS[k] + " " + pesos(miCaja[k])).join(" · ")}.` : "") : compra ? "Sale de la caja y queda como deuda del cliente. En el pedido pon el domicilio y en “a cobrar” lo que se le cobra al destinatario; al entregar se compensa." : "Se le carga al cliente (queda por cobrar) y suma 100% al sueldo de JS ese día. Ej: $4.000 por punto extra."}</p>
-    <div className="campo"><label htmlFor="mxCli">Cliente</label><div style={{ display: "flex", gap: 6, marginBottom: 6 }}><input id="mxBus" type="search" placeholder="Buscar cliente…" autoComplete="off" style={{ flex: 1 }} value={bus} onChange={e => buscar(e.target.value)} /><button className="btn sec chico" id="mxNuevoCli" type="button" onClick={nuevoCli}>+ Cliente nuevo</button></div>
-      <select id="mxCli" value={x.cid} onChange={e => elegir(e.target.value)}><option value="">{vis.length ? "Elige…" : "Ningún cliente con ese nombre"}</option>{(x.cid && !vis.some(c => c.id === x.cid) && S.clientes[x.cid] ? [S.clientes[x.cid], ...vis] : vis).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+    <div className="campo"><label htmlFor="mxCli">Cliente</label>
+      <ComboCliente id="mxCli" clientes={cs} saldos={saldos} valor={x.cid} alElegir={elegir} alCrear={nuevoCli} />
       <span className="sub" id="mxSaldo" style={{ display: "block", marginTop: 4 }}>{!x.cid ? "" : s < 0 ? <b className="neg">Debe {pesos(-s)}</b> : s > 0 ? <b className="pos">Tiene {pesos(s)} a favor</b> : "Está a paz y salvo"}</span></div>
     <div className="linea2"><div className="campo"><label htmlFor="mxVal">{pago ? "Valor que pagó" : pagoA ? "Valor que le entregas" : "Valor"}</label><input id="mxVal" type="number" inputMode="numeric" min="0" step="100" value={x.val} onChange={e => setX({ ...x, val: e.target.value })} /></div>
       {conMedio && <div className="campo"><label htmlFor="mxMedio">{pago ? "¿Cómo pagó?" : pagoA ? "¿Cómo le pagas?" : "Pagado con"}</label><select id="mxMedio" value={x.medio} onChange={e => setX({ ...x, medio: e.target.value })}>{pago || pagoA ? <option value="">Elige…</option> : null}{MEDIOS_K.map(k => <option key={k} value={k}>{MEDIOS[k]}</option>)}</select></div>}</div>
