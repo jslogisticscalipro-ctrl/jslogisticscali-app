@@ -1,5 +1,5 @@
 /* Oficina → Pedidos, el detalle de una guía y la asignación en bloque, igual al prototipo. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   S, yo, hora, pesos, listaOrdenada, esRepartidor, tipoDe, cambioPendiente, sinServicio, delDia, nombreCliente, cerrado, gastoDe, pagoDomi,
@@ -92,15 +92,19 @@ export default function Pedidos({ pintar }: { pintar: () => void }) {
   const f = E.filtroA, porPagina = usePorPagina();
   const q = usePaginaPedidos(f, E.buscarA, E.mensPedA, E.diaPedA, E.paginaA, porPagina);
   const pag = q.data, ps = pag?.pedidos ?? [], total = pag?.total ?? 0;
-  const enBloque = f === "sin" || f === "serv" ? filtrarEnMemoria(f, E.buscarA, E.mensPedA, E.diaPedA) : [];
+  // Con miles de guías, ordenar y contar en cada pintada (cada tecla de la búsqueda) era trabajo repetido: se recalcula solo si cambian los datos o el filtro.
+  const { version, pinta } = useDatos(), buscarA = E.buscarA, mensPed = E.mensPedA, diaPed = E.diaPedA;
+  const enBloque = useMemo(() => (f === "sin" || f === "serv" ? filtrarEnMemoria(f, buscarA, mensPed, diaPed) : []), [f, buscarA, mensPed, diaPed, version, pinta]);
+  const { totalPedidos, porEntregar, porRecoger, nCambio, nServ, nDif } = useMemo(() => {
+    const todos = Object.values(S.pedidos), suyo = (p: Pedido) => !mensPed || p.mensajeroId === mensPed;
+    return {
+      totalPedidos: mensPed ? todos.filter(suyo).length : todos.length, porEntregar: todos.filter(p => p.estado === "pendiente" && suyo(p)).length, porRecoger: todos.filter(p => p.estado === "aceptado" && suyo(p)).length,
+      nCambio: todos.filter(cambioPendiente).length, nServ: todos.filter(sinServicio).length, nDif: todos.filter(p => Number(p.difCobro) && !p.difRevisada).length,
+    };
+  }, [mensPed, version, pinta]);
   const irA = (n: number) => { poner({ paginaA: n }); arriba.current?.scrollIntoView({ block: "start", behavior: "smooth" }); };
-  const todos = Object.values(S.pedidos);
-  const totalPedidos = E.mensPedA ? todos.filter(p => p.mensajeroId === E.mensPedA).length : todos.length;
-  const porEntregar = todos.filter(p => p.estado === "pendiente" && (!E.mensPedA || p.mensajeroId === E.mensPedA)).length;
-  const porRecoger = todos.filter(p => p.estado === "aceptado" && (!E.mensPedA || p.mensajeroId === E.mensPedA)).length;
   const repartidores = listaOrdenada(S.mensajeros, "nombre").filter(m => esRepartidor(m) || m.id === E.mensPedA);
   const ofis = listaOrdenada(S.mensajeros, "nombre").filter(m => tipoDe(m) === "oficina");
-  const nCambio = todos.filter(cambioPendiente).length, nServ = todos.filter(sinServicio).length, nDif = todos.filter(p => Number(p.difCobro) && !p.difRevisada).length;
   const poner = (cambio: Partial<typeof E>) => { Object.assign(E, cambio); pintar(); };
   const tBuscar = useRef<number>(0);
   useEffect(() => () => clearTimeout(tBuscar.current), []);
@@ -352,7 +356,7 @@ const IntentoFila = ({ n, fecha, motivo, nota }: { n: number; fecha: number; mot
 /* Pedidos en bloque: "sin" pone el mismo remitente a varias guías; "serv" pone el domicilio a varias entregas sin valor. */
 export function EnBloque({ modo, lista }: { modo: string; lista: Pedido[] }) {
   const v = useVentana(), sin = modo === "sin", ps = lista.slice();
-  const [sel, setSel] = useState(() => new Set(ps.map(p => p.guia)));
+  const [sel, setSel] = useState(() => new Set(ps.map(p => p.guia))), [mostrar, setMostrar] = useState(40);
   const [cli, setCli] = useState(""), [cliNombre, setCliNombre] = useState(""), [serv, setServ] = useState(""), [suyo, setSuyo] = useState(true), [guardando, setGuardando] = useState(false);
   const marcar = (g: string, si: boolean) => setSel(s => { const n = new Set(s); if (si) n.add(g); else n.delete(g); return n; });
   const guardar = async () => {
@@ -379,9 +383,10 @@ export function EnBloque({ modo, lista }: { modo: string; lista: Pedido[] }) {
       <div className="campo" id="ebFijoC"><label htmlFor="ebServ">{suyo ? "Valor para las que no tienen domicilio guardado" : "Valor del domicilio para todas"}</label><input id="ebServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} /></div>
     </>}
     <div className="acciones" style={{ margin: "0 0 6px" }}><button className="btn sec chico" id="ebTodos" onClick={() => setSel(new Set(ps.map(p => p.guia)))}>Marcar todas</button><button className="btn sec chico" id="ebNinguna" onClick={() => setSel(new Set())}>Ninguna</button></div>
-    <div style={{ maxHeight: "40vh", overflow: "auto" }}><table><tbody>{ps.map(p => <tr key={p.guia}><td style={{ width: 32 }}><input type="checkbox" checked={sel.has(p.guia)} onChange={e => marcar(p.guia, e.target.checked)} style={{ width: "auto" }} aria-label={p.guia} /></td>
+    <div style={{ maxHeight: "40vh", overflow: "auto" }}><table><tbody>{ps.slice(0, mostrar).map(p => <tr key={p.guia}><td style={{ width: 32 }}><input type="checkbox" checked={sel.has(p.guia)} onChange={e => marcar(p.guia, e.target.checked)} style={{ width: "auto" }} aria-label={p.guia} /></td>
       <td>{p.mini ? <img src={p.mini} alt="" style={{ width: 42, height: 42, objectFit: "cover", borderRadius: 6 }} /> : null}</td>
-      <td><b>{p.guia}</b> <EtqEstado p={p} /><br /><span className="sub" style={{ fontSize: ".8rem" }}>{sin ? S.mensajeros[p.mensajeroId]?.nombre || "" : nombreCliente(p.clienteId)}{p.destinatario ? " · " + p.destinatario : ""} · {hora(p.creado)}{!sin && Number(S.clientes[p.clienteId]?.tarifa) ? " · domicilio " + pesos(S.clientes[p.clienteId].tarifa) : ""}</span></td></tr>)}</tbody></table></div>
+      <td><b>{p.guia}</b> <EtqEstado p={p} /><br /><span className="sub" style={{ fontSize: ".8rem" }}>{sin ? S.mensajeros[p.mensajeroId]?.nombre || "" : nombreCliente(p.clienteId)}{p.destinatario ? " · " + p.destinatario : ""} · {hora(p.creado)}{!sin && Number(S.clientes[p.clienteId]?.tarifa) ? " · domicilio " + pesos(S.clientes[p.clienteId].tarifa) : ""}</span></td></tr>)}</tbody></table>
+      {ps.length > mostrar && <button type="button" className="btn sec chico" id="ebMas" style={{ margin: "8px 0" }} onClick={() => setMostrar(m => m + 40)}>Ver más ({ps.length - mostrar} guías más; las marcadas se guardan todas)</button>}</div>
     <button className="btn ok" id="ebGuardar" style={{ width: "100%", marginTop: 10 }} disabled={!sel.size || guardando} onClick={guardar}>{guardando ? "Guardando…" : `Guardar ${sel.size} ${pl(sel.size, "guía")}`}</button>
   </>;
 }
