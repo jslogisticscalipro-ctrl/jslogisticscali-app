@@ -15,6 +15,8 @@ function ventana<X extends object>(pestana: string, Comp: ComponentType<X>) {
 }
 
 export const AbrirPedido = ventana("pedidos", perezoso<ComponentProps<typeof P.AbrirPedido>>(() => import("./Pedidos").then(m => ({ default: m.AbrirPedido }))));
+/** Sin `ventana()`: no espera ninguna colección completa (solo la guía y la búsqueda de clientes en el servidor). */
+export const AsignarRemitente = perezoso<ComponentProps<typeof P.AsignarRemitente>>(() => import("./Pedidos").then(m => ({ default: m.AsignarRemitente })));
 export const EnBloque = ventana("pedidos", perezoso<ComponentProps<typeof P.EnBloque>>(() => import("./Pedidos").then(m => ({ default: m.EnBloque }))));
 export const AbrirCuenta = ventana("clientes", perezoso<ComponentProps<typeof C.AbrirCuenta>>(() => import("./Clientes").then(m => ({ default: m.AbrirCuenta }))));
 export const FormCliente = ventana("clientes", perezoso<ComponentProps<typeof C.FormCliente>>(() => import("./Clientes").then(m => ({ default: m.FormCliente }))));
