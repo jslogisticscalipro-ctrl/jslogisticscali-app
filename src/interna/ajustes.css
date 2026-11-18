@@ -2302,3 +2302,8 @@
 .jsl .sd-dias .sd-fila > span:first-child{font-weight:600;font-size:.88rem}
 .jsl .sd-dias .sd-fila > span small{margin-left:4px;font-weight:400;color:var(--suave)}
 .jsl .sd-sindesc-marca{font-style:normal;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--verde-claro);color:var(--verde)}
+/* Tabla de Sueldos: el valor de un día de mensajero es un botón para quitar o devolver el descuento. */
+.jsl .sd-semana .sd-celda{display:inline-flex;flex-direction:column;align-items:flex-end;gap:1px;min-height:32px;padding:4px 8px;margin:-4px -8px;border:1px solid transparent;border-radius:8px;background:none;color:inherit;font:inherit;font-variant-numeric:tabular-nums;cursor:pointer}
+.jsl .sd-semana .sd-celda:hover{background:var(--hueco);border-color:var(--linea)}
+.jsl .sd-semana .sd-celda:disabled{opacity:.5;cursor:default}
+.jsl .sd-semana .sd-celda em{font-style:normal;font-size:.65rem;font-weight:700;color:var(--verde)}

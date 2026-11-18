@@ -24,6 +24,15 @@ export default function Sueldos({ pintar }: { pintar: () => void }) {
   const dueno = Object.values(S.mensajeros).find(m => tipoDe(m) === "dueno");
   const adelSem = R.filas.flatMap(f => f.adelantos.map(c => ({ ...c, nom: f.m.nombre }))).sort((a, b) => a.fecha - b.fecha);
   const sem = (w: string) => { E.semA = w; pintar(); };
+  // Tocar el día de un mensajero en la tabla: confirmar y quitarle (o devolverle) el descuento de ese día.
+  const [ocupadoDia, setOcupadoDia] = useState("");
+  const tocarDiaTabla = async (m: Persona, dia: string, i: number) => {
+    const marcado = sinDescuento(m.id, dia), nom = `${DIAS_LARGOS[i]} ${dia.slice(8)}`;
+    if (!await v.confirmar(marcado ? "Volver a descontar" : "Quitar el descuento", marcado ? `¿Volver a descontarle ${pesos(DESC_SUELDO)} a ${m.nombre} el ${nom}?` : `¿Quitarle el descuento de ${pesos(DESC_SUELDO)} a ${m.nombre} el ${nom}?`, marcado ? "Sí, descontar" : "Sí, quitar")) return;
+    setOcupadoDia(m.id + dia);
+    try { await ponerSinDescuento(m.id, dia, !marcado); v.avisar(marcado ? `Ese día vuelve a descontarle ${pesos(DESC_SUELDO)} a ${m.nombre}` : `Ese día no se le descuentan ${pesos(DESC_SUELDO)} a ${m.nombre}`); } catch (e) { fallo(v)(e); }
+    setOcupadoDia("");
+  };
   const detalle = (mid: string) => v.abrir(<DetalleSueldo mid={mid} sem={R.sem} />, "centrada-ancha");
   const adelanto = (mid: string) => v.abrir(<MovCaja tipo="sale" pre={{ cat: "adelanto", personaId: mid, semana: R.sem }} />, "centrada-ancha");
   const pagar = (mid: string, neto: number) => v.abrir(<MovCaja tipo="sale" pre={{ cat: "sueldo", personaId: mid, valor: neto, semana: R.sem }} />, "centrada-ancha");
@@ -52,7 +61,12 @@ export default function Sueldos({ pintar }: { pintar: () => void }) {
       <div className="tabla-env sueldos-tabla sd-semana"><table><thead><tr><th>Persona</th>{R.dias.map((d, i) => <th className="n" key={d}>{DIAS_SEM[i]} <small>{d.slice(8)}</small></th>)}<th className="n">Acciones</th></tr></thead><tbody>
         {filas.map(f => <tr key={f.m.id}>
           <td><b>{f.m.nombre}</b><span className="sd-rol">{TIPOS[tipoDe(f.m)]}</span></td>
-          {f.vals.map((x, i) => <td key={i} className={"n" + (x < 0 ? " neg" : x ? "" : " sd-cero")}>{x ? pesos(x) : "—"}</td>)}
+          {f.vals.map((x, i) => {
+            const d = R.dias[i], sd = ganaPorcentaje(f.m) && sinDescuento(f.m.id, d), puede = ganaPorcentaje(f.m) && d <= hoy() && (!!x || sd);
+            const txt = x ? pesos(x) : "—";
+            return <td key={i} className={"n" + (x < 0 ? " neg" : x ? "" : " sd-cero")}>{puede
+              ? <button type="button" className={"sd-celda" + (sd ? " sin-desc" : "")} disabled={ocupadoDia === f.m.id + d} title={sd ? "Sin descuento: toca para volver a descontar" : "Toca para quitar el descuento de este día"} aria-label={`${f.m.nombre}, ${DIAS_LARGOS[i]} ${d.slice(8)}: ${txt}${sd ? ", sin descuento" : ""}. Cambiar el descuento`} onClick={() => tocarDiaTabla(f.m, d, i)}>{txt}{sd && <em aria-hidden="true">sin desc.</em>}</button>
+              : txt}</td>; })}
           <td className="n"><div className="sd-acciones">
             <button className="btn sec chico" onClick={() => detalle(f.m.id)} aria-label={"Ver detalle de " + f.m.nombre}><IconoCalendario /><span>Detalle</span></button>
             <button className="btn sec chico sd-rapido" onClick={() => adelanto(f.m.id)}>Adelanto</button>
