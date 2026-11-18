@@ -1,7 +1,7 @@
 /* Llamadas al backend, agrupadas por recurso. */
 import { api } from "./cliente";
 import type { FiltroMetodoEntregas, PaginaEntregasPeriodo, GrupoSolicitud, PaginaSolicitudes, FiltrosSolicitudes, PaginaSolicitudesFiltradas, Archivo, TipoArchivo, Cliente, ClienteBreve, Mensajero, Movimiento, Pedido, Usuario, Motivo, MetodoEntrega, Rol, TipoPersonal, Medio, EstadoPedido,
-  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, ResumenCuentas, Cambio, EnPapelera, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, DetalleLiquidacion, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
+  Recaudo, Liquidacion, Jornada, CajaMovimiento, CuentaInterna, ResumenCuentas, Cambio, EnPapelera, EstadoFotos, ResumenLiberar, PaginaPedidos, EnlaceCorreo, PaginaClientes, PagoDeSaldos, PaginaMovimientos, PaginaGanancias, PaginaCajaMovimientos, PaginaUsuarios, AccesoCreado, PaginaHistorial, PaginaLiquidaciones, DetalleLiquidacion, PaginaPersonal, Solicitud, ListaSolicitudes, CajaPatinador, RegistroCajaPatinador, ResumenCajaPatinador, ResumenPatinador, PaginaSolicitudesRecogida, FiltrosCajaPatinador, HistorialRecibidos, RecogidaEnEspera, QrTraspaso, VistaTraspaso } from "./tipos";
 import { FalloApi } from "./cliente";
 
 const datos = <T>(p: Promise<{ data: T }>) => p.then(r => r.data);
@@ -102,7 +102,10 @@ export const pedidos = {
   /** Crea la guía del reintento de un devuelto. El mensajero no manda nada (es suyo); la oficina elige quién lo hace. */
   reintentar: (guia: string, mensajeroId?: string) =>
     datos<{ pedido: Pedido; reintento: Pedido }>(api.post(`/pedidos/${guia}/reintento`, mensajeroId ? { mensajeroId } : {})),
-  archivos: (guia: string) => datos<{ archivos: Archivo[] }>(api.get(`/pedidos/${guia}/archivos`)).then(d => d.archivos),
+  archivos: (guia: string) => datos<{ archivos: Archivo[]; borradas?: boolean }>(api.get(`/pedidos/${guia}/archivos`)).then(d => {
+    if (d.borradas) guiasConFotosBorradas.add(guia); else guiasConFotosBorradas.delete(guia);
+    return d.archivos;
+  }),
   /** La imagen va como cuerpo binario (ya comprimida en el celular), una por petición. */
   subirArchivo: (guia: string, tipo: Exclude<TipoArchivo, "previa">, imagen: Blob) =>
     datos<{ archivo: Archivo }>(api.post(`/pedidos/${guia}/archivos/${tipo}`, imagen, {
@@ -277,6 +280,8 @@ export const caja = {
   /** Responde con el corte que queda (la hora del arqueo anterior) o `null` si ya no hay ninguno. */
   deshacerArqueo: (id: string) => datos<{ id: string; corte: string | null }>(api.delete(`/caja/arqueos/${id}`))
 };
+/** Guías cuyas fotos se borraron para liberar espacio (lo avisa GET /pedidos/:guia/archivos con `borradas`). */
+export const guiasConFotosBorradas = new Set<string>();
 export const historial = {
   /** Cambios desde `desde` (día YYYY-MM-DD en Colombia), los más nuevos primero. */
   listar: (desde: string) => opcional(datos<{ cambios: Cambio[] }>(api.get("/historial", { params: { desde, limite: 600 } })).then(d => d.cambios), [] as Cambio[]),
@@ -299,4 +304,13 @@ export const solicitudes = {
   /** Crea la guía para ese mensajero. Sin clienteId, el backend crea el cliente con los datos de la solicitud. */
   asignar: (id: string, mensajeroId: string, clienteId?: string) =>
     datos<{ solicitud: Solicitud; pedido: Pedido }>(api.post(`/solicitudes/${id}/asignar`, { mensajeroId, clienteId }))
+};
+
+/** Control del espacio de las fotos (solo administración). */
+export const espacioFotos = {
+  estado: () => datos<{ fotos: EstadoFotos }>(api.get("/respaldo/espacio")).then(d => d.fotos),
+  cambiarAviso: (umbral: number) => api.put("/respaldo/fotos/aviso", { umbral }),
+  /** Sin `confirmar` solo revisa: no borra nada. Para borrar hay que mandar confirmar: "BORRAR" y las guías que mostró la revisión. */
+  liberar: (d: { cantidad?: number; desde?: string; hasta?: string; simular?: boolean; confirmar?: string; guiasEsperadas?: number }) =>
+    datos<ResumenLiberar>(api.post("/respaldo/fotos/liberar", d))
 };

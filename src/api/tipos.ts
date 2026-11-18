@@ -237,6 +237,14 @@ export interface PaginaHistorial { cambios: Cambio[]; pagina: number; porPagina:
 /** Una liquidación con las entregas que cerró, el nombre de cada remitente (por id) y si se puede reabrir. */
 export interface DetalleLiquidacion { liquidacion: Liquidacion; entregas: Pedido[]; clientes: Record<string, string>; esUltima: boolean }
 export interface PaginaLiquidaciones { liquidaciones: Liquidacion[]; pagina: number; porPagina: number; total: number; paginas: number }
+/** GET /respaldo/espacio → fotos: lo que ocupan las fotos y firmas en Supabase Storage frente al tope de la capa gratuita. */
+export interface EstadoFotos {
+  bytes: number; limiteBytes: number; porcentaje: number; umbral: number; nivel: "normal" | "aviso" | "critico";
+  medida: "bucket" | "base"; archivos: number; guias: number; sinTamano: number; masAntigua: string | null;
+  liberable: { guias: number; archivos: number; bytes: number }; diasProtegidos: number; storageConfigurado: boolean;
+}
+/** Resultado de revisar (simulacion: true) o de hacer POST /respaldo/fotos/liberar. */
+export interface ResumenLiberar { simulacion: boolean; guias: number; archivos: number; bytes: number; sinTamano: number; desde: string | null; hasta: string | null; maximoPorVez: number }
 export interface EnPapelera { id: string; col: string; docId: string; resumen: string; fecha: string; quien: string }
 
 /** Respuesta de POST /usuarios al crear un acceso pendiente de activación. */

@@ -13,7 +13,7 @@ import { aPersona, aUsuario, motivoError, useDatos } from "../datos";
 import { DEMO } from "../demo";
 import { useEscritorio, usePorPaginaAccesos, usePorPaginaHistorial, usePorPaginaPersonal } from "../../lib/pantalla";
 import * as api from "../../api/servicios";
-import type { Cambio, EnPapelera, PaginaHistorial, PaginaPersonal, Rol } from "../../api/tipos";
+import type { Cambio, EnPapelera, EstadoFotos, ResumenLiberar, PaginaHistorial, PaginaPersonal, Rol } from "../../api/tipos";
 import { FormCliente } from "./modales";
 
 export default function Mas({ pintar }: { pintar: () => void }) {
@@ -726,8 +726,11 @@ function Papelera() {
   </>;
 }
 
-/* ---------- Respaldo ---------- */
-/* La copia en Excel y la medición de espacio eran de Firebase. En el sistema nuevo la base está en Supabase, que hace sus propias copias. */
+/* ---------- Respaldo y espacio ---------- */
+const mb = (b: number) => (b / 1048576).toLocaleString("es-CO", { maximumFractionDigits: b < 10485760 ? 1 : 0 }) + " MB";
+const diaLargo = (d: string | null) => (d ? d.split("-").reverse().join("/") : "");
+const FOTOS_DEMO: EstadoFotos = { bytes: 910 * 1048576, limiteBytes: 1024 * 1048576, porcentaje: 88.9, umbral: 85, nivel: "aviso", medida: "bucket", archivos: 3900, guias: 1100, sinTamano: 0, masAntigua: "2026-03-02T15:00:00Z", liberable: { guias: 900, archivos: 3200, bytes: 760 * 1048576 }, diasProtegidos: 30, storageConfigurado: true };
+
 function Respaldo() {
   return <>
     <h1>Respaldo y espacio</h1>
@@ -735,6 +738,92 @@ function Respaldo() {
     <p className="sub">La base de datos ahora está en Supabase, que guarda copias automáticas todos los días. La descarga de la copia completa en Excel llega en una próxima versión.</p>
     <div className="aviso">Mientras tanto, si necesitas una copia, pídesela a quien administra el sistema.</div>
     <h2>Espacio de las fotos</h2>
-    <p className="sub">Las fotos y firmas se guardan aparte de los datos (Supabase Storage), así que ya no llenan la base de datos. El borrado automático de fotos viejas está diseñado y llega en una próxima versión.</p>
+    <EspacioFotos />
+  </>;
+}
+
+function EspacioFotos() {
+  const v = useVentana(), qc = useQueryClient();
+  const q = useQuery({ queryKey: ["espacioFotos"], queryFn: () => (DEMO ? Promise.resolve(FOTOS_DEMO) : api.espacioFotos.estado()) });
+  const [modo, setModo] = useState<"cantidad" | "rango">("cantidad");
+  const [cantidad, setCantidad] = useState(""), [desde, setDesde] = useState(""), [hasta, setHasta] = useState("");
+  const [umbral, setUmbral] = useState("");
+  const [resumen, setResumen] = useState<ResumenLiberar | null>(null), [palabra, setPalabra] = useState(""), [ocupado, setOcupado] = useState(false);
+  const f = q.data;
+  const criterio = () => (modo === "cantidad" ? { cantidad: Number(cantidad) } : { desde: desde || undefined, hasta: hasta || undefined });
+  const hayCriterio = modo === "cantidad" ? Number(cantidad) >= 1 : !!(desde || hasta);
+  const cambiarCriterio = (fn: () => void) => { fn(); setResumen(null); setPalabra(""); };
+
+  if (q.isLoading) return <div className="vacio">Cargando…</div>;
+  if (q.isError || !f) return <div className="vacio">No se pudo medir el espacio: {motivoError(q.error)} <button className="btn chico" onClick={() => q.refetch()}>Intentar otra vez</button></div>;
+
+  const guardarUmbral = async () => {
+    const n = Number(umbral);
+    if (!Number.isInteger(n) || n < 50 || n > 99) { v.avisar("No se pudo guardar: escribe un número entre 50 y 99"); return; }
+    try { if (!DEMO) await api.espacioFotos.cambiarAviso(n); v.avisar("Aviso guardado"); setUmbral(""); qc.invalidateQueries({ queryKey: ["espacioFotos"] }); } catch (e) { v.avisar("No se pudo guardar: " + motivoError(e)); }
+  };
+  const revisar = async () => {
+    setOcupado(true);
+    try { setResumen(DEMO ? { simulacion: true, guias: 40, archivos: 150, bytes: 34 * 1048576, sinTamano: 0, desde: "2026-03-02", hasta: "2026-03-20", maximoPorVez: 2000 } : await api.espacioFotos.liberar({ ...criterio(), simular: true })); setPalabra(""); }
+    catch (e) { setResumen(null); v.avisar("No se pudo revisar: " + motivoError(e)); }
+    setOcupado(false);
+  };
+  const borrar = async () => {
+    if (!resumen || palabra.trim().toUpperCase() !== "BORRAR") return;
+    setOcupado(true);
+    try {
+      const r = DEMO ? resumen : await api.espacioFotos.liberar({ ...criterio(), confirmar: "BORRAR", guiasEsperadas: resumen.guias });
+      v.avisar(`Listo: se liberaron ${mb(r.bytes)} (${r.archivos} fotos de ${r.guias} guías)`);
+      setResumen(null); setPalabra(""); setCantidad("");
+      qc.invalidateQueries({ queryKey: ["espacioFotos"] });
+    } catch (e) { v.avisar("No se pudo borrar: " + motivoError(e)); setResumen(null); }
+    setOcupado(false);
+  };
+
+  const color = f.nivel === "critico" ? "var(--rojo, #c0392b)" : f.nivel === "aviso" ? "#E0A100" : "var(--verde)";
+  return <>
+    <p className="sub">Las fotos y firmas se guardan aparte de los datos (Supabase Storage). La capa gratuita da {mb(f.limiteBytes)} en total para las fotos.</p>
+    {f.nivel !== "normal" ? <div className="aviso alerta">{f.nivel === "critico" ? "Casi no queda espacio" : "Se está llenando el espacio"}: las fotos usan el {f.porcentaje.toLocaleString("es-CO")} % del total. Libera espacio abajo para que sigan entrando fotos.</div> : null}
+    <section className="tarjeta" style={{ marginBottom: 14 }}>
+      <h3>{mb(f.bytes)} de {mb(f.limiteBytes)} <small>{f.porcentaje.toLocaleString("es-CO")} % usado</small></h3>
+      <div className="prog" aria-hidden="true" style={{ margin: "8px 0" }}><i style={{ width: Math.min(100, f.porcentaje) + "%", background: color }} /></div>
+      <small>{f.archivos.toLocaleString("es-CO")} archivos de {f.guias.toLocaleString("es-CO")} guías{f.masAntigua ? " · la foto más antigua es del " + diaLargo(f.masAntigua.slice(0, 10)) : ""}.
+        {f.sinTamano ? ` Hay ${f.sinTamano} archivos viejos sin tamaño guardado: el total puede ser un poco mayor.` : ""}</small>
+      <div className="campo" style={{ marginTop: 14, maxWidth: 360 }}>
+        <label htmlFor="fUmbral">Avisarme en Inicio desde (ahora {f.umbral} %)</label>
+        <div style={{ display: "flex", gap: 8 }}><input id="fUmbral" type="number" inputMode="numeric" min={50} max={99} placeholder={String(f.umbral)} value={umbral} onChange={e => setUmbral(e.target.value)} /><button className="btn sec chico" onClick={guardarUmbral} disabled={!umbral}>Guardar</button></div>
+      </div>
+    </section>
+
+    <section className="tarjeta">
+      <h3>Liberar espacio</h3>
+      <p className="sub">Se borran las fotos de guías completas (foto de salida, de entrega, firma y miniatura), de la más antigua a la más reciente. <b>No se puede deshacer.</b> La guía y todos sus datos se quedan; solo se pierden las imágenes. Nunca se tocan las guías en ruta, las cerradas hace menos de {f.diasProtegidos} días ni las que tienen una diferencia de cobro sin revisar.</p>
+      <p className="sub">Ahora se podrían liberar hasta <b>{mb(f.liberable.bytes)}</b> ({f.liberable.guias.toLocaleString("es-CO")} guías).</p>
+      {!f.storageConfigurado ? <div className="aviso alerta">Las fotos todavía no están configuradas en el servidor.</div> : <>
+        <div className="acciones" style={{ marginBottom: 10 }}>
+          <button className={"btn chico " + (modo === "cantidad" ? "" : "sec")} onClick={() => cambiarCriterio(() => setModo("cantidad"))}>Por cantidad</button>
+          <button className={"btn chico " + (modo === "rango" ? "" : "sec")} onClick={() => cambiarCriterio(() => setModo("rango"))}>Por fechas</button>
+        </div>
+        {modo === "cantidad"
+          ? <div className="campo" style={{ maxWidth: 360 }}><label htmlFor="fCant">¿Cuántas guías (las más antiguas)?</label><input id="fCant" type="number" inputMode="numeric" min={1} value={cantidad} onChange={e => cambiarCriterio(() => setCantidad(e.target.value))} placeholder="Ej.: 200" /></div>
+          : <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="campo"><label htmlFor="fDesde">Cerradas desde</label><input id="fDesde" type="date" value={desde} onChange={e => cambiarCriterio(() => setDesde(e.target.value))} /></div>
+            <div className="campo"><label htmlFor="fHasta">Hasta</label><input id="fHasta" type="date" value={hasta} onChange={e => cambiarCriterio(() => setHasta(e.target.value))} /></div>
+          </div>}
+        <div className="acciones" style={{ marginTop: 10 }}><button className="btn chico" onClick={revisar} disabled={!hayCriterio || ocupado}>Revisar qué se borraría</button></div>
+
+        {resumen ? (resumen.guias === 0 ? <div className="aviso" style={{ marginTop: 12 }}>No hay fotos que se puedan borrar con ese criterio.</div> :
+          <div className="aviso alerta" style={{ marginTop: 12 }}>
+            <b>Se borrarían {resumen.archivos.toLocaleString("es-CO")} fotos de {resumen.guias.toLocaleString("es-CO")} guías.</b><br />
+            Liberarías {mb(resumen.bytes)}{resumen.sinTamano ? " o más" : ""}. Son guías cerradas entre el {diaLargo(resumen.desde)} y el {diaLargo(resumen.hasta)}.
+            {resumen.guias >= resumen.maximoPorVez ? ` (El máximo por vez es ${resumen.maximoPorVez} guías; después puedes repetirlo.)` : ""}<br />
+            Esto no se puede deshacer. Para confirmar, escribe <b>BORRAR</b>:
+            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <input aria-label="Escribe BORRAR para confirmar" value={palabra} onChange={e => setPalabra(e.target.value)} placeholder="BORRAR" style={{ maxWidth: 160 }} autoComplete="off" />
+              <button className="btn peligro chico" onClick={borrar} disabled={palabra.trim().toUpperCase() !== "BORRAR" || ocupado}>{ocupado ? "Borrando…" : "Borrar estas fotos"}</button>
+            </div>
+          </div>) : null}
+      </>}
+    </section>
   </>;
 }

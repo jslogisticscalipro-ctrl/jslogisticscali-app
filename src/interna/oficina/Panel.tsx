@@ -5,12 +5,18 @@ import {
 } from "../motor";
 import { Columnas, Dona, EtqDash, Kpi, pl, useVentana } from "../ui";
 import { E } from "../estado";
+import { useQuery } from "@tanstack/react-query";
+import * as api from "../../api/servicios";
+import { DEMO } from "../demo";
 import { AbrirCuenta, AbrirPedido } from "./modales";
 
 const COL_MEDIO: Record<string, string> = { efectivo: "var(--verde)", nequi: "#8E44AD", bancolombia: "#E0A100", cuentas: "var(--marca2)" };
 
 export default function Panel({ pintar }: { pintar: () => void }) {
   const v = useVentana();
+  // Aviso de espacio de las fotos: solo administración; se revisa cada 10 minutos como mucho.
+  const qFotos = useQuery({ queryKey: ["espacioFotos"], queryFn: () => api.espacioFotos.estado(), enabled: yo.esAdmin && !DEMO, staleTime: 10 * 60_000, retry: false });
+  const fotos = qFotos.data && qFotos.data.nivel !== "normal" ? qFotos.data : null;
   const h = hoy(), ayer = moverDia(h, -1), todos = Object.values(S.pedidos);
   const delDiaE = (p: Pedido, d: string, e: string) => p.estado === e && diaDe(p.entregado || 0) === d;
   const entHoy = todos.filter(p => delDiaE(p, h, "entregado")), devHoy = todos.filter(p => delDiaE(p, h, "devuelto"));
@@ -43,6 +49,9 @@ export default function Panel({ pintar }: { pintar: () => void }) {
 
   return <>
     <div className="dash-cab"><div><h1>Panel de control</h1><p className="sub">Así va JS Logistics hoy</p></div>{yo.esAdmin && <button className="btn sec chico" onClick={() => ir("mas|resultados")}>Ver resultados del mes</button>}</div>
+    {fotos ? <div className="aviso alerta" role="alert" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+      <span><b>{fotos.nivel === "critico" ? "Casi no queda espacio para fotos" : "Se está llenando el espacio de las fotos"}:</b> van en el {fotos.porcentaje.toLocaleString("es-CO")} % del total. Libera espacio antes de que se acabe.</span>
+      <button className="btn chico" onClick={() => ir("mas|respaldo")}>Liberar espacio</button></div> : null}
     <div className="kpis">
       <Kpi ico="ok" lbl="Entregados hoy" val={entHoy.length} onClick={() => ir("pedidos|ent|hoy")}
         pie={<><div className="prog" aria-hidden="true"><i style={{ width: efec + "%" }} /></div><small>{entHoy.length + devHoy.length ? efec + "% efectividad · " + devHoy.length + " " + pl(devHoy.length, "devuelto") : "Todavía sin entregas hoy"}</small></>} />

@@ -1,7 +1,7 @@
 /* Piezas comunes de la app interna, con el mismo HTML y las mismas clases del prototipo (app/js/app.js). */
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDatos } from "./datos";
-import { pedidos as apiPedidos } from "../api/servicios";
+import { pedidos as apiPedidos, guiasConFotosBorradas } from "../api/servicios";
 import { DEMO } from "./demo";
 import type { Archivo } from "../api/tipos";
 import { pesos, hoy, moverDia, hora, diaDe, nombreCliente, S, type Pedido } from "./motor";
@@ -210,7 +210,7 @@ export function FotosGuia({ p, id, firma = "Firma", conPrevias, soloSalida }: { 
     ...(!soloSalida && p.estado !== "pendiente" ? [...de("entrega").map(a => [p.estado === "devuelto" ? "Evidencia" : "Entrega", a.url] as [string, string]), ...de("firma").map(a => [firma, a.url] as [string, string])] : []),
     ...(conPrevias ? de("previa").map(a => ["Entrega anterior · " + hora(new Date(a.creado).getTime()), a.url] as [string, string]) : []),
   ];
-  return <div className="fotos" id={id}>{items.length ? items.map(([t, s]) => <figure key={s}><img src={s} alt={t} /><figcaption>{t}</figcaption></figure>) : <span className="sub">Sin fotos.</span>}</div>;
+  return <div className="fotos" id={id}>{items.length ? items.map(([t, s]) => <figure key={s}><img src={s} alt={t} /><figcaption>{t}</figcaption></figure>) : <span className="sub">{guiasConFotosBorradas.has(p.guia) ? "Las fotos de esta guía se borraron para liberar espacio." : "Sin fotos."}</span>}</div>;
 }
 
 /** Re-pinta la pantalla cuando cambian los datos. */
