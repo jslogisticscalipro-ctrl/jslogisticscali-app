@@ -2282,3 +2282,15 @@
 .jsl .esq-t{width:120px;height:20px;margin:0}.jsl .esq-l{width:40%}.jsl .esq-c{width:100%;height:38px;border-radius:10px}
 @keyframes esq{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.jsl .esq{animation:none}}
+
+/* Sueldos: la tabla muestra el sueldo de cada día; la primera columna queda fija si hay que desplazar de lado. */
+.jsl .sd-semana table{min-width:880px}
+.jsl .sd-semana th small{font-weight:400;opacity:.7}
+.jsl .sd-semana td.sd-cero{color:var(--suave)}
+.jsl .sd-semana td.n{font-variant-numeric:tabular-nums}
+.jsl .sd-semana th:first-child,.jsl .sd-semana td:first-child{position:sticky;left:0;z-index:1;background:var(--papel);box-shadow:1px 0 0 var(--linea)}
+.jsl .sd-semana th:first-child{background:var(--hueco)}
+.jsl .sd-semana .sd-total td:first-child{background:var(--hueco)}
+.jsl .sd-resumen-arriba{margin:0 0 14px}
+.jsl .sd-semana th:last-child,.jsl .sd-semana td:last-child{position:sticky;right:0;z-index:1;background:var(--papel);box-shadow:-1px 0 0 var(--linea)}
+.jsl .sd-semana th:last-child,.jsl .sd-semana .sd-total td:last-child{background:var(--hueco)}

@@ -48,21 +48,17 @@ export default function Sueldos({ pintar }: { pintar: () => void }) {
         {buscar && <button type="button" className="sd-limpiar" aria-label="Limpiar búsqueda" onClick={() => setBuscar("")}>×</button>}
       </label>
       {!filas.length ? <div className="vacio">Nadie coincide con “{buscar.trim()}”.</div> : <>
-      {/* Computador: tabla resumida (el detalle de cada día va en la ventana "Detalle de sueldo"). */}
-      <div className="tabla-env sueldos-tabla"><table><thead><tr><th>Persona</th><th className="n">Anterior</th><th className="n">Total</th><th className="n">Adelantos</th><th className="n">Pagado</th><th className="n">Neto</th><th className="n">Acciones</th></tr></thead><tbody>
+      {/* Computador: el sueldo de cada día de la semana; el total, los adelantos y el neto están en "Detalle". */}
+      <div className="tabla-env sueldos-tabla sd-semana"><table><thead><tr><th>Persona</th>{R.dias.map((d, i) => <th className="n" key={d}>{DIAS_SEM[i]} <small>{d.slice(8)}</small></th>)}<th className="n">Acciones</th></tr></thead><tbody>
         {filas.map(f => <tr key={f.m.id}>
           <td><b>{f.m.nombre}</b><span className="sd-rol">{TIPOS[tipoDe(f.m)]}</span></td>
-          <td className="n"><a href="#" className="enlace" title="Sueldo que llevaba antes de la app" onClick={e => { e.preventDefault(); v.abrir(<EditarPrevio m={f.m} sem={R.sem} />, "centrada-ancha"); }}>{f.previo ? pesos(f.previo) : "+"}</a></td>
-          <td className="n"><b>{pesos(f.total)}</b></td>
-          <td className={"n" + (f.adel ? " sd-adel" : "")}>{f.adel ? pesos(f.adel) : "—"}</td>
-          <td className={"n" + (f.pagado ? " sd-pagado" : "")}>{f.pagado ? pesos(f.pagado) : "—"}</td>
-          <td className="n"><b className={"sd-neto" + (f.neto < 0 ? " neg" : "")}>{pesos(f.neto)}</b></td>
+          {f.vals.map((x, i) => <td key={i} className={"n" + (x < 0 ? " neg" : x ? "" : " sd-cero")}>{x ? pesos(x) : "—"}</td>)}
           <td className="n"><div className="sd-acciones">
             <button className="btn sec chico" onClick={() => detalle(f.m.id)} aria-label={"Ver detalle de " + f.m.nombre}><IconoCalendario /><span>Detalle</span></button>
             <button className="btn sec chico sd-rapido" onClick={() => adelanto(f.m.id)}>Adelanto</button>
             <button className="btn ok chico sd-rapido" disabled={f.neto <= 0} onClick={() => pagar(f.m.id, f.neto)}>Pagar</button>
           </div></td></tr>)}
-        <tr className="sd-total"><td><b>Total</b></td><td className="n">{pesos(R.filas.reduce((a, f) => a + f.previo, 0))}</td><td className="n"><b>{pesos(tot.total)}</b></td><td className="n">{pesos(tot.adel)}</td><td className="n">{pesos(tot.pagado)}</td><td className="n"><b>{pesos(tot.neto)}</b></td><td></td></tr>
+        <tr className="sd-total"><td><b>Total</b></td>{R.porDia.map((_, i) => { const t = R.filas.reduce((a, f) => a + f.vals[i], 0); return <td className="n" key={i}><b>{t ? pesos(t) : "—"}</b></td>; })}<td></td></tr>
       </tbody></table></div>
       {/* Celular: una fila por persona con su neto; al tocarla se abre el mismo detalle. */}
       <ul className="sueldos-lista">
@@ -176,7 +172,14 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
       <div><h2>{m.nombre} <span className="sd-badge">{TIPOS[t]}</span></h2><p className="sub">{DIAS_SEM[0]} {diaCorto(r.dias[0])} – {DIAS_SEM[6]} {diaCorto(r.dias[6])}</p></div>
       <button className="cerrar" data-cerrar aria-label="Cerrar">×</button>
     </header>
-    <h3 className="sd-titulo">Desglose diario de la semana</h3>
+    <dl className="sd-resumen sd-resumen-arriba">
+      <div><dt>Sueldo anterior</dt><dd>{enlace(r.previo ? pesos(r.previo) : "Agregar", () => v.abrir(<EditarPrevio m={m} sem={sem} despues={volver} />, "centrada-ancha"))}</dd></div>
+      <div><dt>Total semana</dt><dd>{pesos(r.total)}</dd></div>
+      <div><dt>Adelantos</dt><dd className={r.adel ? "sd-adel" : "sd-cero"}>{r.adel ? "− " + pesos(r.adel) : "—"}</dd></div>
+      <div><dt>Ya pagado</dt><dd className={r.pagado ? "sd-pagado" : "sd-cero"}>{r.pagado ? "− " + pesos(r.pagado) : "—"}</dd></div>
+      <div className="sd-neto-fila"><dt>Neto por pagar</dt><dd className={r.neto < 0 ? "neg" : ""}>{pesos(r.neto)}</dd></div>
+    </dl>
+    <h3 className="sd-titulo">Sueldo por día</h3>
     {editable && <p className="sub sd-ayuda">{m.tarifa ? <>Toca un día para marcarlo con {pesos(m.tarifa)}; otro toque lo quita. {enlace("Cambiar pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))} · {enlace("otro valor", () => v.abrir(<OtroValor m={m} dias={r.dias} />, "centrada-ancha"))}</> : enlace("Poner pago por día", () => v.abrir(<PedirTarifa m={m} despues={async () => volver()} />, "centrada-ancha"))}</p>}
     {conDescuento && <p className="sub sd-ayuda">Cada día se le descuentan {pesos(DESC_SUELDO)}. Si un día no debe descontarse, toca “Sin descuento”; otro toque lo quita.</p>}
     <ul className="sd-dias">
@@ -190,13 +193,6 @@ function DetalleSueldo({ mid, sem }: { mid: string; sem: string }) {
           </span>}
       </li>; })}
     </ul>
-    <dl className="sd-resumen">
-      <div><dt>Sueldo anterior</dt><dd>{enlace(r.previo ? pesos(r.previo) : "Agregar", () => v.abrir(<EditarPrevio m={m} sem={sem} despues={volver} />, "centrada-ancha"))}</dd></div>
-      <div><dt>Total semana</dt><dd>{pesos(r.total)}</dd></div>
-      <div><dt>Adelantos</dt><dd className={r.adel ? "sd-adel" : "sd-cero"}>{r.adel ? "− " + pesos(r.adel) : "—"}</dd></div>
-      <div><dt>Ya pagado</dt><dd className={r.pagado ? "sd-pagado" : "sd-cero"}>{r.pagado ? "− " + pesos(r.pagado) : "—"}</dd></div>
-      <div className="sd-neto-fila"><dt>Neto por pagar</dt><dd className={r.neto < 0 ? "neg" : ""}>{pesos(r.neto)}</dd></div>
-    </dl>
     <div className="sd-pie">
       <button className="btn sec" onClick={() => v.abrir(<MovCaja tipo="sale" pre={{ cat: "adelanto", personaId: mid, semana: sem }} />, "centrada-ancha")}>Adelanto</button>
       <button className="btn ok" disabled={r.neto <= 0} onClick={() => v.abrir(<MovCaja tipo="sale" pre={{ cat: "sueldo", personaId: mid, valor: r.neto, semana: sem }} />, "centrada-ancha")}>Pagar</button>
