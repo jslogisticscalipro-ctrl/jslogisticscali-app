@@ -254,7 +254,7 @@ function DetalleGuia({ guia, cliElegido }: { guia: string; cliElegido?: string }
     <div className="pedido-drawer-cuerpo">
     <div className="pedido-detalle-grid">
     <section className="pedido-detalle-panel pedido-detalle-edicion" aria-label="Editar pedido">
-    <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegirCli} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setQ}
+    <BuscadorRemitente elegido={cli ? { id: cli, nombre: cliNombre } : null} alElegir={elegirCli} alCambiar={() => { setCli(""); setCliNombre(""); }} alEscribir={setQ} siguienteId="pServ"
       extra={<button className="btn sec chico" id="pNuevoCli" type="button" onClick={() => v.abrir(<FormCliente alGuardar={cid => v.abrir(<AbrirPedido guia={guia} cliElegido={cid} />, "drawer")} nombre={q} />, "centrada")}>+ Crear cliente nuevo</button>} />
     <div className="pedido-bloque">
       <div className="campo"><label htmlFor="pServ">Valor del servicio</label><div className="monto"><span aria-hidden="true">$</span><input id="pServ" type="number" inputMode="numeric" min="0" step="100" value={serv} onChange={e => setServ(e.target.value)} placeholder="0" /></div></div>
@@ -301,7 +301,7 @@ function DetalleGuia({ guia, cliElegido }: { guia: string; cliElegido?: string }
     </section>}
     <section className="pedido-detalle-panel" aria-label="Registro fotográfico">
     <h3>Registro fotográfico</h3>
-    <FotosGuia p={p} id="pFotos" conPrevias />
+    <FotosGuia p={p} id="pFotos" conPrevias grandes />
     </section>
     </div>
     </div>

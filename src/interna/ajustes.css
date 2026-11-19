@@ -661,6 +661,19 @@
 .jsl .pedido-detalle-panel .devolucion{margin:0}
 .jsl .pedido-detalle-panel .fotos{grid-template-columns:repeat(2,minmax(0,1fr));margin:0}
 .jsl .pedido-detalle-panel .fotos img{aspect-ratio:1.35;object-fit:cover}
+.jsl .fotos-grandes{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin:0}
+.jsl .foto-zoom{margin:0;min-width:0}
+.jsl .foto-zoom-marco{position:relative;width:100%;height:16rem;border-radius:16px;overflow:hidden;background:var(--fondo);border:1px solid var(--linea)}
+.jsl .foto-zoom-visor{width:100%;height:100%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.jsl .foto-zoom-visor img{display:block;width:100%;height:100%;max-width:none;object-fit:contain;aspect-ratio:auto;cursor:zoom-in;transition:width .2s,height .2s}
+.jsl .foto-zoom-visor[data-zoom="si"] img{cursor:zoom-out}
+.jsl .foto-zoom-barra{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:rgba(2,6,23,.75);backdrop-filter:blur(6px);color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.jsl .foto-zoom-barra span{min-width:38px;text-align:center;font-size:.72rem;font-weight:700}
+.jsl .foto-zoom-barra button{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;cursor:pointer}
+.jsl .foto-zoom-barra button:hover:not(:disabled){background:rgba(255,255,255,.18)}
+.jsl .foto-zoom-barra button:disabled{opacity:.4;cursor:default}
+.jsl .foto-zoom figcaption{margin-top:6px;font-size:.8rem;font-weight:600}
+@media (min-width:640px){.jsl .foto-zoom-marco{height:18rem}}
 .jsl .pedido-drawer-pie{flex:none;max-height:28dvh;overflow-y:auto;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--linea);background:var(--papel);gap:8px}
 .jsl .pedido-drawer-pie .btn{min-height:38px}
 @media (min-width:640px){.jsl .pedido-detalle-edicion .linea2{grid-template-columns:repeat(2,minmax(0,1fr))}}

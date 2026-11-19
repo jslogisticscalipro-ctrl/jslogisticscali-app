@@ -7,6 +7,7 @@ import type { Archivo } from "../api/tipos";
 import { pesos, hoy, moverDia, hora, diaDe, nombreCliente, S, type Pedido } from "./motor";
 import { SelectorFecha } from "./Calendario";
 import { useMini } from "./miniaturas";
+import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { alertaAdmin, avisoRapido, tonoDeAviso } from "../lib/alertasAdmin";
 
 /* ---------- iconos ---------- */
@@ -207,12 +208,36 @@ export function Columnas({ datos, nombre }: { datos: { l: string; n: number; tip
 }
 
 /* ---------- fotos de una guía ---------- */
+/** Foto de ejemplo (etiqueta de un paquete) para probar el zoom en la demo, que no tiene fotos reales. */
+const FOTO_DEMO = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect width="800" height="600" fill="#cbd5e1"/><rect x="120" y="90" width="560" height="420" rx="12" fill="#d6a76b"/><rect x="190" y="150" width="420" height="230" fill="#fff"/><text x="210" y="205" font-family="Arial" font-size="26" font-weight="700" fill="#111">Para: Cliente de ejemplo</text><text x="210" y="250" font-family="Arial" font-size="20" fill="#333">Cra 5 # 12-34, Cali</text><text x="210" y="290" font-family="Arial" font-size="20" fill="#333">Tel. 300 000 0000</text><rect x="210" y="315" width="300" height="40" fill="#111"/></svg>');
 export const fotosCache = new Map<string, Archivo[]>();
 /** Fotos y firma de la guía como en el prototipo: Salida, Entrega (o Evidencia), Firma y las entregas anteriores. */
-export function FotosGuia({ p, id, firma = "Firma", conPrevias, soloSalida }: { p: Pedido; id: string; firma?: string; conPrevias?: boolean; soloSalida?: boolean }) {
+/** Niveles de la barra de zoom de una foto (1x, 1.75x y 2.5x). */
+const NIVELES_ZOOM = [1, 1.75, 2.5];
+/** Foto a todo el ancho con zoom en el mismo lugar: barra con acercar, alejar y ampliar; clic en la foto alterna 1x y 2x. */
+function FotoZoom({ titulo, src }: { titulo: string; src: string }) {
+  const v = useVentana(), [zoom, setZoom] = useState(1);
+  const sube = () => setZoom(z => NIVELES_ZOOM[Math.min(NIVELES_ZOOM.indexOf(z) + 1, NIVELES_ZOOM.length - 1)] ?? 1);
+  const baja = () => setZoom(z => NIVELES_ZOOM[Math.max(NIVELES_ZOOM.indexOf(z) - 1, 0)] ?? 1);
+  return <figure className="foto-zoom">
+    <div className="foto-zoom-marco">
+      <div className="foto-zoom-barra" role="group" aria-label={"Zoom de la foto de " + titulo}>
+        <button type="button" onClick={baja} disabled={zoom <= 1} aria-label="Alejar" title="Alejar"><ZoomOut size={16} aria-hidden="true" /></button>
+        <span aria-live="polite">{zoom === 1.75 ? "1.75" : zoom}x</span>
+        <button type="button" onClick={sube} disabled={zoom >= NIVELES_ZOOM[NIVELES_ZOOM.length - 1]} aria-label="Acercar" title="Acercar"><ZoomIn size={16} aria-hidden="true" /></button>
+        <button type="button" onClick={() => v.ampliar(src)} aria-label="Ampliar a pantalla completa" title="Ampliar a pantalla completa"><Maximize2 size={16} aria-hidden="true" /></button>
+      </div>
+      <div className="foto-zoom-visor" data-zoom={zoom > 1 ? "si" : "no"}>
+        <img src={src} alt={titulo} onClick={() => setZoom(z => (z > 1 ? 1 : 2))} style={zoom > 1 ? { width: zoom * 100 + "%", maxWidth: "none", height: zoom * 100 + "%" } : undefined} draggable={false} />
+      </div>
+    </div>
+    <figcaption>{titulo}{zoom === 1 && <span className="sub"> · toca la foto para acercar</span>}</figcaption>
+  </figure>;
+}
+export function FotosGuia({ p, id, firma = "Firma", conPrevias, soloSalida, grandes }: { p: Pedido; id: string; firma?: string; conPrevias?: boolean; soloSalida?: boolean; grandes?: boolean }) {
   const [lista, setLista] = useState<Archivo[] | null | "error">(fotosCache.get(p.guia) ?? null);
   useEffect(() => {
-    if (DEMO) { setLista([]); return; }
+    if (DEMO) { setLista(p.estado === "pendiente" ? [] : [{ tipo: "salida", url: FOTO_DEMO, creado: new Date().toISOString() }]); return; }
     let vivo = true;
     apiPedidos.archivos(p.guia).then(a => { fotosCache.set(p.guia, a); if (vivo) setLista(a); }).catch(() => vivo && setLista("error"));
     return () => { vivo = false; };
@@ -225,6 +250,8 @@ export function FotosGuia({ p, id, firma = "Firma", conPrevias, soloSalida }: { 
     ...(!soloSalida && p.estado !== "pendiente" ? [...de("entrega").map(a => [p.estado === "devuelto" ? "Evidencia" : "Entrega", a.url] as [string, string]), ...de("firma").map(a => [firma, a.url] as [string, string])] : []),
     ...(conPrevias ? de("previa").map(a => ["Entrega anterior · " + hora(new Date(a.creado).getTime()), a.url] as [string, string]) : []),
   ];
+  // «grandes»: cada foto ocupa todo el ancho con zoom (detalle del pedido en la oficina). El zoom se reinicia solo al cambiar de guía, porque la clave lleva la guía.
+  if (grandes && items.length) return <div className="fotos-grandes" id={id}>{items.map(([t, s]) => <FotoZoom key={p.guia + s} titulo={t} src={s} />)}</div>;
   return <div className="fotos" id={id}>{items.length ? items.map(([t, s]) => <figure key={s}><img src={s} alt={t} /><figcaption>{t}</figcaption></figure>) : <span className="sub">{guiasConFotosBorradas.has(p.guia) ? "Las fotos de esta guía se borraron para liberar espacio." : "Sin fotos."}</span>}</div>;
 }
 
