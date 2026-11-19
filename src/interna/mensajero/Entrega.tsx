@@ -27,7 +27,11 @@ function useFoto() {
   const [foto, setFoto] = useState<Blob | null>(null), [vista, setVista] = useState("");
   const camara = useRef<HTMLInputElement>(null), galeria = useRef<HTMLInputElement>(null);
   useEffect(() => { if (!foto) return; const u = URL.createObjectURL(foto); setVista(u); return () => URL.revokeObjectURL(u); }, [foto]);
-  const elegir = async (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) setFoto(await comprimir(f)); };
+  const v = useVentana();
+  const elegir = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (f) try { setFoto(await comprimir(f)); } catch (err) { v.avisar("No se pudo usar la foto: " + motivoError(err)); }
+  };
   const bloque = (pre: string) => <>
     <div className="foto-elegida"><img id={pre + "FotoPrev"} className={vista ? "" : "oculto"} src={vista || undefined} alt="" />
       <button className="btn sec" id={pre + "FotoBtn"} type="button" onClick={() => camara.current?.click()}><IconoCamara chico /> {foto && pre === "e" ? "Cambiar foto" : "Tomar foto"}</button>

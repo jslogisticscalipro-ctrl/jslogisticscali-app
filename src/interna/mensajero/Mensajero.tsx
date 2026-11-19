@@ -23,6 +23,7 @@ import { DlgEscanearQr } from "./EscanearQr";
 import { pendientesMios, porRecogerMios, devolucionesPorDefinirMios } from "./pendientes";
 import { DlgDestinoDev } from "./Reintento";
 import type { Medio, Pedido } from "../motor";
+import { AVISO_HEIF, esHeif } from "../../lib/imagen";
 
 /** Sub-pestañas de Pedidos del mensajero. */
 const SUBS_PED: [k: "todos" | "entregar" | "recoger", t: string][] = [["todos", "Todos"], ["entregar", "Por entregar"], ["recoger", "Por recoger"]];
@@ -45,8 +46,16 @@ export default function Mensajero({ pintar }: { pintar: () => void }) {
   };
 
   // Al tomar la foto solo se abre la ventana: la guía se crea cuando el mensajero pulsa "Crear guía".
-  const fotos = (lista: FileList | null) => {
+  const fotos = async (lista: FileList | null) => {
     let files = [...(lista || [])].filter(f => f.type.startsWith("image/")); if (!files.length) return;
+    // Las fotos HEIC (alta eficiencia de Samsung) no se pueden abrir en el navegador: se avisa antes de abrir la ventana.
+    const heif = await Promise.all(files.map(esHeif));
+    if (heif.some(Boolean)) {
+      files = files.filter((_, i) => !heif[i]);
+      const n = heif.filter(Boolean).length;
+      ventana.avisar((files.length ? (n === 1 ? "Falta 1 foto, no se usó: " : "Faltan " + n + " fotos, no se usaron: ") : "No se pudo usar la foto: ") + AVISO_HEIF + ".");
+      if (!files.length) return;
+    }
     if (files.length > MAX_FOTOS) { ventana.avisar("Máximo " + MAX_FOTOS + " fotos a la vez"); files = files.slice(0, MAX_FOTOS); }
     const alCrear = (hechas: string[]) => { E.ultimaGuia = hechas.length === 1 ? hechas[0] : hechas[0] + " a " + hechas[hechas.length - 1]; pintar(); };
     ventana.abrir(<DlgNuevaGuia fotos={files} mensajeroId={E.miMensajero} alCrear={alCrear} />, "centrada");
@@ -54,8 +63,8 @@ export default function Mensajero({ pintar }: { pintar: () => void }) {
   const btnFoto = () => { if (camara.current) { camara.current.value = ""; camara.current.click(); } };
   const btnGaleria = () => { if (galeria.current) { galeria.current.value = ""; galeria.current.click(); } };
   const entradas = <>
-    <input type="file" ref={camara} accept="image/*" capture="environment" className="oculto" onChange={e => fotos(e.target.files)} />
-    <input type="file" ref={galeria} accept="image/*" multiple className="oculto" onChange={e => fotos(e.target.files)} />
+    <input type="file" ref={camara} accept="image/*" capture="environment" className="oculto" onChange={e => void fotos(e.target.files)} />
+    <input type="file" ref={galeria} accept="image/*" multiple className="oculto" onChange={e => void fotos(e.target.files)} />
   </>;
 
   let h: React.ReactNode;

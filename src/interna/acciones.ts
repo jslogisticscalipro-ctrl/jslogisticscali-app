@@ -7,7 +7,7 @@ import type * as T from "../api/tipos";
 import { periodoMensajero, servicio, S, yo, type Pedido, type Medio, type Motivo, type Metodo, type TipoMov, type TipoPersonal, type Almacen, type CajaMov, type Liquidacion, hora, sinTildes, pesos, diaDe, MEDIOS, saldoCliente, idSinDesc } from "./motor";
 import { aPedido, aPersona, aRec, aMov, aLiq, aCaja, type Coleccion } from "./datos";
 import { DEMO, remitentesDemo } from "./demo";
-import { comprimir, firmaABlob, FOTO, MINI } from "../lib/imagen";
+import { comprimir, firmaABlob, prepararFoto, FOTO, MINI } from "../lib/imagen";
 import { canjearDemo, aNombreDe } from "./traspaso";
 
 type Tocar = (fn?: (s: Almacen) => void) => void;
@@ -41,7 +41,7 @@ export async function crearGuias(files: File[], mensajeroId: string, avance: (ms
           gasto: 0, gastoNota: "", domiPagado: false, domiPagoMedio: "", domiPagoValor: null, domiPagoFecha: 0, domiPagoUid: "", intentos: [], mini }; });
         hechas.push(guia); continue;
       }
-      const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
+      const [foto, mini] = await prepararFoto(f, [FOTO, MINI]);
       // La guía y su foto se crean juntas en el servidor: si la foto no sube, la guía no existe (no queda una guía sin foto
       // que la oficina tenga que borrar). La miniatura va después y, si falla, la guía igual tiene su foto.
       const p = await api.pedidos.crearConFoto(foto, yo.esAdmin || yo.esAsistente ? mensajeroId : undefined);
@@ -70,7 +70,7 @@ export async function recoger(guia: string, f: File) {
     const mini = URL.createObjectURL(await comprimir(f, MINI));
     return demoPedido(guia, { estado: "pendiente", creado: Date.now(), mini });
   }
-  const [foto, mini] = await Promise.all([comprimir(f, FOTO), comprimir(f, MINI)]);
+  const [foto, mini] = await prepararFoto(f, [FOTO, MINI]);
   // Primero la foto y después la miniatura: si la foto falla, no queda una miniatura que haga parecer que sí subió.
   await api.pedidos.subirArchivo(guia, "salida", foto);
   await api.pedidos.subirArchivo(guia, "mini", mini).catch(() => {});
