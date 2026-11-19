@@ -27,7 +27,7 @@ export function DlgNuevaGuia({ fotos, mensajeroId, alCrear }: { fotos: File[]; m
     <header><h2>{n === 1 ? "¿Crear la guía de esta foto?" : "¿Crear " + n + " guías?"}</h2><button className="cerrar" data-cerrar aria-label="Cerrar">×</button></header>
     <div className="ng-subida ng-fase-revisar">
       <div className="ng-foto">
-        {vista && <img src={vista} alt="Foto del pedido" />}
+        {vista && <img src={vista} alt="Foto del pedido" onError={() => setVista("")} />}
         {n > 1 && <span className="ng-cuenta">{n}</span>}
       </div>
       <div className="ng-texto">

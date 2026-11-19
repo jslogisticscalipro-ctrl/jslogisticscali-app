@@ -23,6 +23,8 @@ export default defineConfig({
             { name: "avisos", test: /node_modules[\\/]sweetalert2[\\/]/ },
             // ExcelJS solo se baja al pedir un Excel en Clientes (oficina/excelClientes.ts).
             { name: "excel", test: /node_modules[\\/]exceljs[\\/]/ },
+            // El conversor de fotos HEIC (~3 MB, WASM) solo se baja cuando llega una foto HEIC (lib/imagen.ts).
+            { name: "heic", test: /node_modules[\\/]heic-to[\\/]/ },
             { name: "librerias", test: /node_modules[\\/]/ }
           ]
         }

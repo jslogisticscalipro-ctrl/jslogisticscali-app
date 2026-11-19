@@ -1,5 +1,7 @@
 /* Compresión de fotos en el celular antes de subirlas. Mismos valores que la app actual:
    800 px y calidad 0,5 para las fotos (~100 KB), 140 px para la miniatura de la lista. */
+import { cargaSegura } from "./cargaSegura";
+
 export const FOTO = { px: 800, calidad: 0.5 };
 export const MINI = { px: 140, calidad: 0.6 };
 
@@ -7,8 +9,8 @@ const aBlob = (c: HTMLCanvasElement, calidad: number) =>
   new Promise<Blob>((ok, mal) => c.toBlob(b => (b ? ok(b) : mal(new Error("No se pudo preparar la foto"))), "image/jpeg", calidad));
 
 /* Los Samsung (y otros Android) guardan las fotos de la galería en HEIC/HEIF si la cámara tiene activadas las
-   «Imágenes de alta eficiencia». Chrome y Samsung Internet no saben abrir ese formato, así que la foto no se puede
-   preparar. La cámara de la app sí entrega JPEG: por eso con la cámara funciona y desde la galería no. */
+   «Imágenes de alta eficiencia». Chrome y Samsung Internet no saben abrir ese formato: aquí se convierte con `heic-to`.
+   La cámara de la app sí entrega JPEG: por eso con la cámara siempre funcionó y desde la galería no. */
 const MARCAS_HEIF = ["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"];
 
 /** ¿El archivo es HEIC/HEIF? Mira el tipo y, si no lo trae, los primeros bytes (`ftypheic`, `ftypmif1`…). */
@@ -21,14 +23,24 @@ export async function esHeif(archivo: Blob): Promise<boolean> {
   } catch { return false; }
 }
 
-export const AVISO_HEIF = "la foto está en formato HEIC (alta eficiencia) y el celular no la deja abrir aquí. Tómala con el botón de cámara, o en la cámara del celular ve a Ajustes › Formatos de imagen y apaga «Imágenes de alta eficiencia»";
+const AVISO_HEIF = "No se pudo abrir esa foto (formato HEIC). Revisa la señal e intenta otra vez, o tómala con el botón de cámara";
 
-/** Abre la imagen. Si `createImageBitmap` falla (pasa en algunos Android con fotos grandes), prueba con un <img>. */
+/** El conversor de HEIC pesa unos 3 MB: solo se baja cuando llega una foto HEIC (o al elegirla, para adelantarlo). */
+let conversor: Promise<typeof import("heic-to")> | null = null;
+export function precargarHeif() {
+  conversor ??= cargaSegura(() => import("heic-to")).catch(e => { conversor = null; throw e; });
+  return conversor;
+}
+
+/** Abre la imagen. Si `createImageBitmap` falla (pasa en algunos Android con fotos grandes), prueba con un <img>.
+    Si es HEIC, la convierte con el conversor (WASM), así el mensajero no tiene que cambiar nada en el celular. */
 async function abrir(archivo: Blob): Promise<{ img: CanvasImageSource; ancho: number; alto: number; soltar: () => void }> {
-  try {
-    const b = await createImageBitmap(archivo);
-    return { img: b, ancho: b.width, alto: b.height, soltar: () => b.close() };
-  } catch { /* se intenta con <img> */ }
+  const comoBitmap = (b: ImageBitmap) => ({ img: b, ancho: b.width, alto: b.height, soltar: () => b.close() });
+  try { return comoBitmap(await createImageBitmap(archivo)); } catch { /* se intenta de otra forma */ }
+  if (await esHeif(archivo)) {
+    try { const { heicTo } = await precargarHeif(); return comoBitmap(await heicTo({ blob: archivo, type: "bitmap" })); }
+    catch { throw new Error(AVISO_HEIF); }
+  }
   const url = URL.createObjectURL(archivo);
   try {
     const el = new Image();
@@ -39,7 +51,6 @@ async function abrir(archivo: Blob): Promise<{ img: CanvasImageSource; ancho: nu
     return { img: el, ancho: el.naturalWidth, alto: el.naturalHeight, soltar: () => URL.revokeObjectURL(url) };
   } catch {
     URL.revokeObjectURL(url);
-    if (await esHeif(archivo)) throw new Error(AVISO_HEIF.charAt(0).toUpperCase() + AVISO_HEIF.slice(1));
     throw new Error("No se pudo abrir esa foto. Si está en la nube, descárgala primero, o tómala con la cámara");
   }
 }
